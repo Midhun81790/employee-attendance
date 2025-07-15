@@ -10,7 +10,7 @@ const COMPANY_LOCATION = {
   latitude: 15.227778, // Piduguralla coordinates
   longitude: 79.885556,
   address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
-  radius: 200 // 200 meters radius
+  radius: 50 // 50 meters radius - must be very close to the shop
 };
 
 // Calculate distance between two coordinates (Haversine formula)
@@ -192,6 +192,19 @@ router.post("/mark-attendance", async (req, res) => {
       distance,
       isWithinGeofence
     });
+
+    // STRICT ENFORCEMENT: Block attendance if not within geofence
+    if (!isWithinGeofence) {
+      console.log("ATTENDANCE BLOCKED: Employee outside geofence");
+      return res.status(403).json({ 
+        message: `Attendance denied: You are ${Math.round(distance)}m away from the office. You must be within ${COMPANY_LOCATION.radius}m to mark attendance.`,
+        distance: Math.round(distance),
+        requiredRadius: COMPANY_LOCATION.radius,
+        isWithinGeofence: false
+      });
+    }
+
+    console.log("✅ Location verified - Employee is within geofence");
 
     // Get device info
     const deviceInfo = {

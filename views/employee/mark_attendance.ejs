@@ -301,13 +301,13 @@
             `;
             
             document.getElementById('useManualLocation').onclick = function() {
-                // For testing purposes, use a default location
-                console.log('Using manual location fallback');
+                // For testing purposes, use the exact office location
+                console.log('Using manual location fallback - exact office location');
                 const defaultLocation = {
                     coords: {
-                        latitude: companyLocation.latitude + 0.001, // Close to office
-                        longitude: companyLocation.longitude + 0.001,
-                        accuracy: 50
+                        latitude: companyLocation.latitude, // Exact office location
+                        longitude: companyLocation.longitude,
+                        accuracy: 10 // Very accurate
                     }
                 };
                 handleLocationSuccess(defaultLocation);
@@ -425,8 +425,8 @@
             const locationCard = document.getElementById('locationCard');
             const markBtn = document.getElementById('markAttendanceBtn');
             
-            let statusClass = isWithinGeofence ? 'location-verified' : 'location-warning';
-            let statusIcon = isWithinGeofence ? 'bi-geo-alt-fill text-success' : 'bi-geo-alt text-warning';
+            let statusClass = isWithinGeofence ? 'location-verified' : 'location-error';
+            let statusIcon = isWithinGeofence ? 'bi-geo-alt-fill text-success' : 'bi-geo-alt text-danger';
             let statusText = isWithinGeofence ? 'Within office area' : 'Outside office area';
             
             locationCard.className = `location-card mb-4 ${statusClass}`;
@@ -443,15 +443,34 @@
                     </div>
                 </div>
                 ${!isWithinGeofence ? `
-                <div class="alert alert-warning mt-3 mb-0">
-                    <i class="bi bi-exclamation-triangle"></i>
-                    <strong>Note:</strong> You are outside the office area. Attendance will still be recorded but may require manager approval.
+                <div class="alert alert-danger mt-3 mb-0">
+                    <i class="bi bi-x-circle"></i>
+                    <strong>Access Denied:</strong> You must be at the office location (within ${companyLocation.radius}m) to mark attendance. 
+                    Please go to the office and try again.
                 </div>
                 ` : ''}
             `;
             
-            // Show face scanning after location is verified
-            showFaceScanning();
+            // STRICT ENFORCEMENT: Only allow attendance if within geofence
+            if (isWithinGeofence) {
+                // Show face scanning after location is verified
+                showFaceScanning();
+            } else {
+                // Hide face scanning and disable attendance button
+                document.getElementById('faceScanCard').style.display = 'none';
+                markBtn.disabled = true;
+                markBtn.innerHTML = '<i class="bi bi-x-circle"></i> Not at Office Location';
+                markBtn.className = 'btn btn-danger disabled';
+                
+                // Show error message
+                document.getElementById('resultArea').innerHTML = `
+                    <div class="alert alert-danger">
+                        <h6><i class="bi bi-x-circle"></i> Attendance Blocked</h6>
+                        <p class="mb-0">You are ${Math.round(distance)}m away from the office. 
+                        You must be within ${companyLocation.radius}m to mark attendance.</p>
+                    </div>
+                `;
+            }
         }
 
         // Show face scanning after location is verified
@@ -750,6 +769,10 @@
                 if (response.ok) {
                     console.log('SUCCESS: Attendance marked');
                     showSuccess(result);
+                } else if (response.status === 403) {
+                    console.log('FORBIDDEN: Location access denied');
+                    showLocationError(result.message || 'You are not at the office location', 
+                                    `Distance: ${result.distance || 'Unknown'}m. Required: within ${result.requiredRadius || 200}m`);
                 } else {
                     console.log('ERROR: Failed to mark attendance');
                     showError(result.message || 'Unknown error occurred');
