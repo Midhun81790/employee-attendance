@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Face-API.js Model Test v2</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        .status-success { color: #28a745; }
+        .status-error { color: #dc3545; }
+        .status-loading { color: #ffc107; }
+    </style>
+</head>
+<body>
+    <div class="container mt-5">
+        <h2>Face-API.js Model Test v2</h2>
+        
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Library Loading Status</h5>
+            </div>
+            <div class="card-body">
+                <div id="libraryStatus" class="status-loading">⏳ Loading face-api.js library...</div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Model Accessibility Results</h5>
+            </div>
+            <div class="card-body" id="modelResults">
+                Loading...
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Model Loading Test</h5>
+            </div>
+            <div class="card-body">
+                <button id="testModelsBtn" class="btn btn-primary" disabled>Test Model Loading</button>
+                <div id="modelTestResults" class="mt-3"></div>
+            </div>
+        </div>
+
+        <div class="card mt-4">
+            <div class="card-header">
+                <h5>Error Details</h5>
+            </div>
+            <div class="card-body">
+                <pre id="errorDetails" class="text-muted">No errors</pre>
+            </div>
+        </div>
+    </div>
+
+    <!-- Try multiple CDN sources for face-api.js -->
+    <script>
+        let faceApiLoaded = false;
+        let currentScript = 0;
+        
+        const cdnSources = [
+            'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+            'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js',
+            'https://cdnjs.cloudflare.com/ajax/libs/face-api.js/0.22.2/face-api.min.js'
+        ];
+
+        function loadFaceApi(index = 0) {
+            if (index >= cdnSources.length) {
+                document.getElementById('libraryStatus').innerHTML = '❌ <span class="status-error">Failed to load face-api.js from all CDN sources</span>';
+                document.getElementById('errorDetails').textContent = 'All CDN sources failed to load face-api.js';
+                return;
+            }
+
+            const script = document.createElement('script');
+            script.src = cdnSources[index];
+            
+            script.onload = function() {
+                console.log(`face-api.js loaded successfully from: ${cdnSources[index]}`);
+                if (typeof faceapi !== 'undefined') {
+                    faceApiLoaded = true;
+                    document.getElementById('libraryStatus').innerHTML = `✅ <span class="status-success">face-api.js loaded successfully from CDN ${index + 1}</span>`;
+                    document.getElementById('testModelsBtn').disabled = false;
+                    checkModelAccessibility();
+                } else {
+                    console.log(`face-api.js script loaded but faceapi is still undefined from: ${cdnSources[index]}`);
+                    loadFaceApi(index + 1);
+                }
+            };
+            
+            script.onerror = function() {
+                console.log(`Failed to load face-api.js from: ${cdnSources[index]}`);
+                loadFaceApi(index + 1);
+            };
+            
+            document.head.appendChild(script);
+        }
+
+        async function checkModelAccessibility() {
+            try {
+                const response = await fetch('/test-models');
+                const data = await response.json();
+                
+                let html = '<ul class="list-group">';
+                html += `<li class="list-group-item">Tiny Face Detector: ${data.modelsExist.tinyFaceDetector ? '✅ Accessible' : '❌ Missing'}</li>`;
+                html += `<li class="list-group-item">Face Recognition: ${data.modelsExist.faceRecognition ? '✅ Accessible' : '❌ Missing'}</li>`;
+                html += `<li class="list-group-item">Face Landmark 68: ${data.modelsExist.faceLandmark68 ? '✅ Accessible' : '❌ Missing'}</li>`;
+                html += `<li class="list-group-item">All Models Present: ${data.allModelsPresent ? '✅ Yes' : '❌ No'}</li>`;
+                html += '</ul>';
+                
+                document.getElementById('modelResults').innerHTML = html;
+            } catch (error) {
+                document.getElementById('modelResults').innerHTML = `<div class="alert alert-danger">Error checking models: ${error.message}</div>`;
+            }
+        }
+
+        async function testModels() {
+            if (!faceApiLoaded || typeof faceapi === 'undefined') {
+                document.getElementById('modelTestResults').innerHTML = '<div class="alert alert-danger">face-api.js library not loaded</div>';
+                return;
+            }
+
+            const resultsDiv = document.getElementById('modelTestResults');
+            resultsDiv.innerHTML = '<div class="spinner-border" role="status"><span class="visually-hidden">Loading...</span></div> Testing model loading...';
+
+            try {
+                console.log('Starting model loading test...');
+                
+                // Test loading models one by one
+                const modelTests = [];
+                
+                // Tiny Face Detector
+                try {
+                    await faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector');
+                    modelTests.push({ name: 'Tiny Face Detector', status: 'success', error: null });
+                    console.log('✅ Tiny Face Detector loaded');
+                } catch (error) {
+                    modelTests.push({ name: 'Tiny Face Detector', status: 'error', error: error.message });
+                    console.error('❌ Tiny Face Detector failed:', error);
+                }
+
+                // Face Recognition
+                try {
+                    await faceapi.nets.faceRecognitionNet.loadFromUri('/models/face_recognition');
+                    modelTests.push({ name: 'Face Recognition', status: 'success', error: null });
+                    console.log('✅ Face Recognition loaded');
+                } catch (error) {
+                    modelTests.push({ name: 'Face Recognition', status: 'error', error: error.message });
+                    console.error('❌ Face Recognition failed:', error);
+                }
+
+                // Face Landmark 68
+                try {
+                    await faceapi.nets.faceLandmark68Net.loadFromUri('/models/face_landmark_68');
+                    modelTests.push({ name: 'Face Landmark 68', status: 'success', error: null });
+                    console.log('✅ Face Landmark 68 loaded');
+                } catch (error) {
+                    modelTests.push({ name: 'Face Landmark 68', status: 'error', error: error.message });
+                    console.error('❌ Face Landmark 68 failed:', error);
+                }
+
+                // Display results
+                let html = '<div class="mt-3"><h6>Model Loading Results:</h6><ul class="list-group">';
+                modelTests.forEach(test => {
+                    const icon = test.status === 'success' ? '✅' : '❌';
+                    const className = test.status === 'success' ? 'list-group-item-success' : 'list-group-item-danger';
+                    html += `<li class="list-group-item ${className}">${icon} ${test.name}`;
+                    if (test.error) {
+                        html += `<br><small class="text-muted">Error: ${test.error}</small>`;
+                    }
+                    html += '</li>';
+                });
+                html += '</ul></div>';
+
+                const successCount = modelTests.filter(t => t.status === 'success').length;
+                if (successCount === modelTests.length) {
+                    html += '<div class="alert alert-success mt-3">🎉 All models loaded successfully!</div>';
+                } else {
+                    html += `<div class="alert alert-warning mt-3">⚠️ ${successCount}/${modelTests.length} models loaded successfully</div>';
+                }
+
+                resultsDiv.innerHTML = html;
+
+            } catch (error) {
+                console.error('Error during model testing:', error);
+                resultsDiv.innerHTML = `<div class="alert alert-danger">Error during model testing: ${error.message}</div>`;
+                document.getElementById('errorDetails').textContent = error.stack;
+            }
+        }
+
+        // Event listeners
+        document.addEventListener('DOMContentLoaded', function() {
+            document.getElementById('testModelsBtn').addEventListener('click', testModels);
+            loadFaceApi(); // Start loading face-api.js
+        });
+    </script>
+</body>
+</html>

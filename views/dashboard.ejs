@@ -1,0 +1,467 @@
+<!-- views/dashboard.ejs -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Admin Dashboard</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+    .dashboard-card {
+      transition: transform 0.2s;
+    }
+    .dashboard-card:hover {
+      transform: translateY(-2px);
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+      <span class="navbar-brand mb-0 h1">
+        <i class="fas fa-users"></i> Employee Attendance System
+      </span>
+      <a href="/logout" class="btn btn-light">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </a>
+    </div>
+  </nav>
+
+  <div class="container mt-5">
+    <div class="row">
+      <div class="col-12">
+        <h2 class="mb-4">Welcome to Admin Dashboard</h2>
+        <p class="text-muted">Manage employee attendance with face recognition technology</p>
+      </div>
+    </div>
+
+    <div class="row g-4">
+      <div class="col-md-6 col-lg-3">
+        <div class="card dashboard-card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-user-plus fa-3x text-success"></i>
+            </div>
+            <h5 class="card-title">Register Employee</h5>
+            <p class="card-text">Add new employees to the system with face recognition</p>
+            <a href="/register" class="btn btn-success">
+              <i class="fas fa-plus"></i> Register
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-3">
+        <div class="card dashboard-card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-camera fa-3x text-primary"></i>
+            </div>
+            <h5 class="card-title">Mark Attendance</h5>
+            <p class="card-text">Employees can mark their attendance using camera</p>
+            <a href="/mark" class="btn btn-primary">
+              <i class="fas fa-camera"></i> Mark Attendance
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-3">
+        <div class="card dashboard-card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-video fa-3x text-success"></i>
+            </div>
+            <h5 class="card-title">Auto Scanner</h5>
+            <p class="card-text">Automatic face recognition and attendance marking</p>
+            <a href="/mark-auto" class="btn btn-success">
+              <i class="fas fa-video"></i> Auto Scan
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-3">
+        <div class="card dashboard-card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-chart-line fa-3x text-info"></i>
+            </div>
+            <h5 class="card-title">View Attendance</h5>
+            <p class="card-text">View and manage attendance records</p>
+            <a href="/attendance" class="btn btn-info">
+              <i class="fas fa-list"></i> View Records
+            </a>
+          </div>
+        </div>
+      </div>
+
+      <div class="col-md-6 col-lg-3">
+        <div class="card dashboard-card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-users fa-3x text-warning"></i>
+            </div>
+            <h5 class="card-title">Manage Employees</h5>
+            <p class="card-text">View all registered employees</p>
+            <button class="btn btn-warning" onclick="loadEmployees()">
+              <i class="fas fa-users"></i> View Employees
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employee Portal Management Row -->
+    <div class="row mt-4">
+      <div class="col-md-6">
+        <div class="card dashboard-card h-100 shadow-sm">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-key fa-3x text-secondary"></i>
+            </div>
+            <h5 class="card-title">Employee Portal</h5>
+            <p class="card-text">Manage employee login credentials for mobile attendance</p>
+            <button class="btn btn-secondary" onclick="loadEmployeeCredentials()">
+              <i class="fas fa-key"></i> Manage Credentials
+            </button>
+          </div>
+        </div>
+      </div>
+      <div class="col-md-6">
+        <div class="card dashboard-card h-100 shadow-sm bg-light">
+          <div class="card-body text-center">
+            <div class="mb-3">
+              <i class="fas fa-mobile-alt fa-3x text-info"></i>
+            </div>
+            <h5 class="card-title">Employee Portal Access</h5>
+            <p class="card-text">Direct link for employees to access their portal</p>
+            <a href="/employee" class="btn btn-info" target="_blank">
+              <i class="fas fa-external-link-alt"></i> Open Employee Portal
+            </a>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="row mt-5">
+      <div class="col-12">
+        <div class="card">
+          <div class="card-header">
+            <h5 class="mb-0">System Statistics</h5>
+          </div>
+          <div class="card-body">
+            <div class="row text-center">
+              <div class="col-md-4">
+                <div class="stat-item">
+                  <h3 class="text-primary" id="totalEmployees">-</h3>
+                  <p class="text-muted">Total Employees</p>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="stat-item">
+                  <h3 class="text-success" id="todayAttendance">-</h3>
+                  <p class="text-muted">Today's Attendance</p>
+                </div>
+              </div>
+              <div class="col-md-4">
+                <div class="stat-item">
+                  <h3 class="text-info" id="totalRecords">-</h3>
+                  <p class="text-muted">Total Records</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employees Modal -->
+    <div class="modal fade" id="employeesModal" tabindex="-1">
+      <div class="modal-dialog modal-lg">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Registered Employees</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Name</th>
+                    <th>Registration Date</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="employeesList">
+                  <!-- Employees will be loaded here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <!-- Employee Credentials Modal -->
+    <div class="modal fade" id="credentialsModal" tabindex="-1">
+      <div class="modal-dialog modal-xl">
+        <div class="modal-content">
+          <div class="modal-header">
+            <h5 class="modal-title">Employee Portal Credentials</h5>
+            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+          </div>
+          <div class="modal-body">
+            <div class="row mb-4">
+              <div class="col-12">
+                <button class="btn btn-primary" onclick="showCreateCredentialForm()">
+                  <i class="fas fa-plus"></i> Create New Credential
+                </button>
+              </div>
+            </div>
+            
+            <!-- Create Credential Form -->
+            <div id="createCredentialForm" class="card mb-4" style="display: none;">
+              <div class="card-header">
+                <h6 class="mb-0">Create Employee Credential</h6>
+              </div>
+              <div class="card-body">
+                <form id="credentialForm">
+                  <div class="row">
+                    <div class="col-md-4">
+                      <label class="form-label">Select Employee</label>
+                      <select class="form-select" id="employeeSelect" required>
+                        <option value="">Choose employee...</option>
+                      </select>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Employee ID</label>
+                      <input type="text" class="form-control" id="employeeIdInput" 
+                             placeholder="e.g., EMP001" required>
+                    </div>
+                    <div class="col-md-4">
+                      <label class="form-label">Password</label>
+                      <input type="password" class="form-control" id="passwordInput" 
+                             placeholder="Enter password" required>
+                    </div>
+                  </div>
+                  <div class="row mt-3">
+                    <div class="col-12">
+                      <button type="submit" class="btn btn-success me-2">
+                        <i class="fas fa-save"></i> Create Credential
+                      </button>
+                      <button type="button" class="btn btn-secondary" onclick="hideCreateCredentialForm()">
+                        Cancel
+                      </button>
+                    </div>
+                  </div>
+                </form>
+              </div>
+            </div>
+
+            <div class="table-responsive">
+              <table class="table table-striped">
+                <thead>
+                  <tr>
+                    <th>Employee Name</th>
+                    <th>Employee ID</th>
+                    <th>Created Date</th>
+                    <th>Last Login</th>
+                    <th>Status</th>
+                    <th>Actions</th>
+                  </tr>
+                </thead>
+                <tbody id="credentialsList">
+                  <!-- Credentials will be loaded here -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+  <script>
+    // Load dashboard statistics
+    async function loadStats() {
+      try {
+        const employeesRes = await fetch('/get-employees');
+        const employees = await employeesRes.json();
+        document.getElementById('totalEmployees').textContent = employees.length;
+      } catch (error) {
+        console.error('Error loading stats:', error);
+      }
+    }
+
+    // Load employees in modal
+    async function loadEmployees() {
+      try {
+        const response = await fetch('/get-employees');
+        const employees = await response.json();
+        
+        const tbody = document.getElementById('employeesList');
+        tbody.innerHTML = '';
+        
+        employees.forEach(emp => {
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${emp.name}</td>
+            <td>${new Date().toLocaleDateString()}</td>
+            <td>
+              <button class="btn btn-sm btn-outline-danger" onclick="deleteEmployee('${emp._id}')">
+                <i class="fas fa-trash"></i> Delete
+              </button>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+        
+        new bootstrap.Modal(document.getElementById('employeesModal')).show();
+      } catch (error) {
+        console.error('Error loading employees:', error);
+      }
+    }
+
+    // Load employee credentials
+    async function loadEmployeeCredentials() {
+      try {
+        // Load employees for dropdown
+        const empResponse = await fetch('/get-employees', { credentials: 'same-origin' });
+        const employees = await empResponse.json();
+        
+        const employeeSelect = document.getElementById('employeeSelect');
+        employeeSelect.innerHTML = '<option value="">Choose employee...</option>';
+        employees.forEach(emp => {
+          employeeSelect.innerHTML += `<option value="${emp._id}">${emp.name}</option>`;
+        });
+
+        // Load existing credentials
+        const credResponse = await fetch('/employee-credentials', { credentials: 'same-origin' });
+        const credentials = await credResponse.json();
+        
+        const tbody = document.getElementById('credentialsList');
+        tbody.innerHTML = '';
+        
+        if (credentials.length === 0) {
+          tbody.innerHTML = `
+            <tr>
+              <td colspan="6" class="text-center text-muted">
+                No employee credentials found. Create some to get started.
+              </td>
+            </tr>
+          `;
+        } else {
+          credentials.forEach(cred => {
+            const row = document.createElement('tr');
+            row.innerHTML = `
+              <td>${cred.employee ? cred.employee.name : 'Unknown'}</td>
+              <td><strong>${cred.employeeId}</strong></td>
+              <td>${new Date(cred.createdAt).toLocaleDateString()}</td>
+              <td>${cred.lastLogin ? new Date(cred.lastLogin).toLocaleDateString() : 'Never'}</td>
+              <td>
+                <span class="badge ${cred.isActive ? 'bg-success' : 'bg-danger'}">
+                  ${cred.isActive ? 'Active' : 'Inactive'}
+                </span>
+              </td>
+              <td>
+                <button class="btn btn-sm btn-outline-danger" onclick="deleteCredential('${cred._id}')">
+                  <i class="fas fa-trash"></i> Deactivate
+                </button>
+              </td>
+            `;
+            tbody.appendChild(row);
+          });
+        }
+        
+        new bootstrap.Modal(document.getElementById('credentialsModal')).show();
+      } catch (error) {
+        console.error('Error loading credentials:', error);
+        alert('Error loading credentials: ' + error.message);
+      }
+    }
+
+    // Show create credential form
+    function showCreateCredentialForm() {
+      document.getElementById('createCredentialForm').style.display = 'block';
+    }
+
+    // Hide create credential form
+    function hideCreateCredentialForm() {
+      document.getElementById('createCredentialForm').style.display = 'none';
+      document.getElementById('credentialForm').reset();
+    }
+
+    // Create employee credential
+    document.getElementById('credentialForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+      
+      const employeeObjectId = document.getElementById('employeeSelect').value;
+      const employeeId = document.getElementById('employeeIdInput').value;
+      const password = document.getElementById('passwordInput').value;
+      
+      if (!employeeObjectId || !employeeId || !password) {
+        alert('Please fill all fields');
+        return;
+      }
+      
+      try {
+        const response = await fetch('/create-employee-credential', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({
+            employeeObjectId,
+            employeeId,
+            password
+          })
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          alert('Employee credential created successfully!');
+          hideCreateCredentialForm();
+          loadEmployeeCredentials(); // Reload the modal
+        } else {
+          alert('Error: ' + result.message);
+        }
+      } catch (error) {
+        console.error('Error creating credential:', error);
+        alert('Error creating credential: ' + error.message);
+      }
+    });
+
+    // Delete employee credential
+    async function deleteCredential(credentialId) {
+      if (!confirm('Are you sure you want to deactivate this credential?')) return;
+      
+      try {
+        const response = await fetch(`/employee-credential/${credentialId}`, {
+          method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        if (response.ok) {
+          alert('Employee credential deactivated successfully!');
+          loadEmployeeCredentials(); // Reload the modal
+        } else {
+          alert('Error: ' + result.message);
+        }
+      } catch (error) {
+        console.error('Error deactivating credential:', error);
+        alert('Error deactivating credential: ' + error.message);
+      }
+    }
+
+    // Load stats on page load
+    loadStats();
+  </script>
+</body>
+</html>

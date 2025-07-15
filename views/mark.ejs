@@ -1,0 +1,477 @@
+<!-- views/mark.ejs -->
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Mark Attendance</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <style>
+    body {
+      background: #f8f9fa;
+    }
+    .video-container {
+      position: relative;
+      display: inline-block;
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 0 20px rgba(0,0,0,0.2);
+    }
+    .status-indicator {
+      position: absolute;
+      top: 10px;
+      right: 10px;
+      padding: 5px 10px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: bold;
+    }
+    .status-loading {
+      background: #ffc107;
+      color: #000;
+    }
+    .status-ready {
+      background: #28a745;
+      color: #fff;
+    }
+    .capture-button {
+      background: linear-gradient(45deg, #007bff, #0056b3);
+      border: none;
+      padding: 15px 30px;
+      font-size: 18px;
+      font-weight: bold;
+      border-radius: 50px;
+      box-shadow: 0 4px 15px rgba(0,123,255,0.3);
+      transition: all 0.3s;
+    }
+    .capture-button:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 6px 20px rgba(0,123,255,0.4);
+    }
+    .nav-header {
+      background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+      color: white;
+      padding: 1rem 0;
+    }
+  </style>
+</head>
+<body>
+  <nav class="navbar navbar-expand-lg navbar-dark bg-primary">
+    <div class="container-fluid">
+      <a class="navbar-brand" href="/dashboard">
+        <i class="fas fa-arrow-left"></i> Back to Dashboard
+      </a>
+      <span class="navbar-text">
+        Mark Attendance
+      </span>
+      <a href="/logout" class="btn btn-light">
+        <i class="fas fa-sign-out-alt"></i> Logout
+      </a>
+    </div>
+  </nav>
+
+  <div class="nav-header">
+    <div class="container text-center">
+      <h2><i class="fas fa-camera"></i> Face Recognition Attendance</h2>
+      <p class="lead">Position your face in the camera to mark attendance</p>
+    </div>
+  </div>
+
+  <div class="container mt-5">
+    <div class="row justify-content-center">
+      <div class="col-md-8 text-center">
+        <div class="card shadow-lg">
+          <div class="card-body p-4">
+            <div class="video-container mb-4">
+              <video id="video" width="480" height="360" autoplay></video>
+              <canvas id="canvas" style="display: none;"></canvas>
+              <div id="statusIndicator" class="status-indicator status-loading">
+                Loading...
+              </div>
+            </div>
+
+            <div class="mb-4">
+              <button class="btn btn-primary capture-button" id="captureBtn" onclick="markAttendance()" disabled>
+                <i class="fas fa-camera"></i> Capture & Mark Attendance
+              </button>
+            </div>
+
+            <div class="progress mb-3" style="display: none;" id="progressBar">
+              <div class="progress-bar progress-bar-striped progress-bar-animated" role="progressbar" style="width: 0%"></div>
+            </div>
+
+            <div id="result"></div>
+
+            <div class="mt-4">
+              <div class="row">
+                <div class="col-md-6">
+                  <div class="card bg-light">
+                    <div class="card-body text-center">
+                      <h6 class="text-muted">Registered Employees</h6>
+                      <h4 id="employeeCount">-</h4>
+                    </div>
+                  </div>
+                </div>
+                <div class="col-md-6">
+                  <div class="card bg-light">
+                    <div class="card-body text-center">
+                      <h6 class="text-muted">Today's Attendance</h6>
+                      <h4 id="todayCount">-</h4>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+  <script src="https://kit.fontawesome.com/your-fontawesome-kit.js" crossorigin="anonymous"></script>
+  <script>
+    const video = document.getElementById("video");
+    const canvas = document.getElementById("canvas");
+    const captureBtn = document.getElementById("captureBtn");
+    const statusIndicator = document.getElementById("statusIndicator");
+    const progressBar = document.getElementById("progressBar");
+    
+    let labeledDescriptors = [];
+    let modelsLoaded = false;
+    let faceApiLoaded = false;
+
+    // Load face-api.js from CDN with fallback
+    function loadFaceApiLibrary() {
+      return new Promise((resolve, reject) => {
+        const cdnSources = [
+          'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js',
+          'https://unpkg.com/face-api.js@0.22.2/dist/face-api.min.js'
+        ];
+
+        let currentIndex = 0;
+
+        function tryLoadScript() {
+          if (currentIndex >= cdnSources.length) {
+            reject(new Error('Failed to load face-api.js from all CDN sources'));
+            return;
+          }
+
+          const script = document.createElement('script');
+          script.src = cdnSources[currentIndex];
+
+          script.onload = function() {
+            if (typeof faceapi !== 'undefined') {
+              console.log('face-api.js loaded successfully');
+              faceApiLoaded = true;
+              resolve();
+            } else {
+              currentIndex++;
+              tryLoadScript();
+            }
+          };
+
+          script.onerror = function() {
+            console.error(`Failed to load from ${cdnSources[currentIndex]}`);
+            currentIndex++;
+            tryLoadScript();
+          };
+
+          document.head.appendChild(script);
+        }
+
+        tryLoadScript();
+      });
+    }
+
+    // Start video stream
+    async function startVideo() {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ 
+          video: { 
+            width: 480, 
+            height: 360,
+            facingMode: 'user'
+          } 
+        });
+        video.srcObject = stream;
+        updateStatus("Camera Ready", "ready");
+      } catch (error) {
+        console.error("Error accessing camera:", error);
+        document.getElementById("result").innerHTML = 
+          `<div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> 
+            Unable to access camera. Please check permissions.
+          </div>`;
+      }
+    }
+
+    // Load face-api models
+    async function loadModels() {
+      try {
+        if (!faceApiLoaded || typeof faceapi === 'undefined') {
+          throw new Error('face-api.js library not loaded');
+        }
+
+        updateStatus("Loading AI Models...", "loading");
+        
+        console.log("Starting to load face-api models...");
+        
+        // Load models one by one to see which one fails
+        try {
+          console.log("Loading tinyFaceDetector...");
+          await faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector');
+          console.log("✅ tinyFaceDetector loaded");
+        } catch (err) {
+          console.error("❌ Failed to load tinyFaceDetector:", err);
+          throw err;
+        }
+        
+        // Try to load SSD MobileNet for better detection
+        try {
+          console.log("Loading ssdMobilenetv1...");
+          await faceapi.nets.ssdMobilenetv1.loadFromUri('/models/ssd_mobilenetv1');
+          console.log("✅ ssdMobilenetv1 loaded");
+        } catch (err) {
+          console.warn("⚠️ Failed to load ssdMobilenetv1 (optional):", err);
+        }
+        
+        try {
+          console.log("Loading faceRecognitionNet...");
+          await faceapi.nets.faceRecognitionNet.loadFromUri('/models/face_recognition');
+          console.log("✅ faceRecognitionNet loaded");
+        } catch (err) {
+          console.error("❌ Failed to load faceRecognitionNet:", err);
+          throw err;
+        }
+        
+        try {
+          console.log("Loading faceLandmark68Net...");
+          await faceapi.nets.faceLandmark68Net.loadFromUri('/models/face_landmark_68');
+          console.log("✅ faceLandmark68Net loaded");
+        } catch (err) {
+          console.error("❌ Failed to load faceLandmark68Net:", err);
+          throw err;
+        }
+        
+        modelsLoaded = true;
+        updateStatus("Models Loaded", "ready");
+        console.log("🎉 All models loaded successfully!");
+        await fetchDescriptors();
+      } catch (error) {
+        console.error("❌ Error loading models:", error);
+        updateStatus("Model Load Failed", "loading");
+        document.getElementById("result").innerHTML = 
+          `<div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> 
+            Failed to load AI models: ${error.message}<br>
+            <small>Check browser console for details. Please refresh the page.</small>
+          </div>`;
+      }
+    }
+
+    // Fetch employee descriptors
+    async function fetchDescriptors() {
+      try {
+        updateStatus("Loading Employee Data...", "loading");
+        
+        const response = await fetch('/get-descriptors');
+        const employees = await response.json();
+        
+        labeledDescriptors = [];
+        employees.forEach(emp => {
+          if (emp.faceId && emp.faceId.length > 0) {
+            const descriptor = new Float32Array(emp.faceId);
+            const labeledFace = new faceapi.LabeledFaceDescriptors(emp.name, [descriptor]);
+            labeledDescriptors.push(labeledFace);
+          }
+        });
+        
+        document.getElementById("employeeCount").textContent = employees.length;
+        updateStatus("Ready to Scan", "ready");
+        captureBtn.disabled = false;
+        
+        if (employees.length === 0) {
+          document.getElementById("result").innerHTML = 
+            `<div class="alert alert-warning">
+              <i class="fas fa-info-circle"></i> 
+              No employees registered yet. <a href="/register" class="alert-link">Register employees first</a>.
+            </div>`;
+        }
+      } catch (error) {
+        console.error("Error fetching descriptors:", error);
+        updateStatus("Data Load Failed", "loading");
+      }
+    }
+
+    // Update status indicator
+    function updateStatus(text, type) {
+      statusIndicator.textContent = text;
+      statusIndicator.className = `status-indicator status-${type}`;
+    }
+
+    // Show progress
+    function showProgress(percent) {
+      progressBar.style.display = 'block';
+      progressBar.querySelector('.progress-bar').style.width = percent + '%';
+    }
+
+    function hideProgress() {
+      progressBar.style.display = 'none';
+    }
+
+    // Mark attendance function
+    async function markAttendance() {
+      if (!modelsLoaded) {
+        document.getElementById("result").innerHTML = 
+          `<div class="alert alert-warning">
+            <i class="fas fa-hourglass-half"></i> Please wait for models to load
+          </div>`;
+        return;
+      }
+
+      if (labeledDescriptors.length === 0) {
+        document.getElementById("result").innerHTML = 
+          `<div class="alert alert-warning">
+            <i class="fas fa-users"></i> No employees registered. 
+            <a href="/register" class="alert-link">Register employees first</a>.
+          </div>`;
+        return;
+      }
+
+      captureBtn.disabled = true;
+      showProgress(25);
+      updateStatus("Detecting Face...", "loading");
+
+      try {
+        // Use more relaxed detection options
+        const detectionOptions = new faceapi.TinyFaceDetectorOptions({
+          inputSize: 224,
+          scoreThreshold: 0.3
+        });
+
+        console.log("Starting face detection for attendance...");
+        
+        // Detect face with landmarks and descriptor
+        let detection = await faceapi
+          .detectSingleFace(video, detectionOptions)
+          .withFaceLandmarks()
+          .withFaceDescriptor();
+
+        // Try alternative detector if first one fails
+        if (!detection) {
+          console.log("TinyFaceDetector failed, trying with more relaxed settings...");
+          
+          const relaxedOptions = new faceapi.TinyFaceDetectorOptions({
+            inputSize: 160,
+            scoreThreshold: 0.2
+          });
+          
+          detection = await faceapi
+            .detectSingleFace(video, relaxedOptions)
+            .withFaceLandmarks()
+            .withFaceDescriptor();
+        }
+
+        showProgress(75);
+
+        if (!detection) {
+          hideProgress();
+          updateStatus("Ready to Scan", "ready");
+          captureBtn.disabled = false;
+          document.getElementById("result").innerHTML = 
+            `<div class="alert alert-warning">
+              <i class="fas fa-user-times"></i> 
+              <strong>No face detected.</strong><br>
+              Please ensure:
+              <ul class="mb-0 mt-2">
+                <li>Good lighting on your face</li>
+                <li>Look directly at the camera</li>
+                <li>Move closer to the camera</li>
+                <li>Remove glasses or face coverings</li>
+              </ul>
+            </div>`;
+          return;
+        }
+
+        console.log("Face detected for attendance! Confidence:", detection.detection.score);
+
+        updateStatus("Recognizing...", "loading");
+        showProgress(90);
+
+        // Match face with registered employees
+        const faceMatcher = new faceapi.FaceMatcher(labeledDescriptors, 0.6);
+        const bestMatch = faceMatcher.findBestMatch(detection.descriptor);
+
+        console.log("Best match:", bestMatch.label, "Distance:", bestMatch.distance);
+
+        showProgress(100);
+
+        // Send recognition result to server
+        const response = await fetch('/mark-attendance', {
+          method: 'POST',
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ name: bestMatch.label })
+        });
+
+        const data = await response.json();
+        
+        hideProgress();
+        updateStatus("Ready to Scan", "ready");
+        captureBtn.disabled = false;
+
+        if (bestMatch.label === 'unknown') {
+          document.getElementById("result").innerHTML = 
+            `<div class="alert alert-danger">
+              <i class="fas fa-user-times"></i> Face not recognized. Please ensure you are registered.
+            </div>`;
+        } else {
+          document.getElementById("result").innerHTML = 
+            `<div class="alert alert-success">
+              <i class="fas fa-check-circle"></i> ${data.message}
+            </div>`;
+          loadTodayCount(); // Refresh today's count
+        }
+
+      } catch (error) {
+        console.error("Error during face recognition:", error);
+        hideProgress();
+        updateStatus("Ready to Scan", "ready");
+        captureBtn.disabled = false;
+        document.getElementById("result").innerHTML = 
+          `<div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> Error during recognition. Please try again.
+          </div>`;
+      }
+    }
+
+    // Load today's attendance count
+    async function loadTodayCount() {
+      // This would require a new endpoint to get today's count
+      // For now, we'll just show a placeholder
+      document.getElementById("todayCount").textContent = "N/A";
+    }
+
+    // Initialize everything
+    async function initialize() {
+      try {
+        await loadFaceApiLibrary();
+        await startVideo();
+        await loadModels();
+        loadTodayCount();
+      } catch (error) {
+        console.error('Error during initialization:', error);
+        updateStatus("Initialization Failed", "loading");
+        document.getElementById("result").innerHTML = 
+          `<div class="alert alert-danger">
+            <i class="fas fa-exclamation-triangle"></i> 
+            Initialization failed: ${error.message}
+          </div>`;
+      }
+    }
+
+    // Start initialization when page loads
+    initialize();
+  </script>
+</body>
+</html>
+</script>
+

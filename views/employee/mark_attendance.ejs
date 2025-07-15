@@ -1,0 +1,766 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Mark <%= attendanceType.replace('_', ' ') %> - <%= employee.name %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .attendance-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+        }
+        .btn-mark {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            border: none;
+            border-radius: 25px;
+            padding: 15px 40px;
+            color: white;
+            font-weight: 600;
+            font-size: 1.1em;
+            transition: all 0.3s ease;
+        }
+        .btn-mark:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 25px rgba(17, 153, 142, 0.4);
+            color: white;
+        }
+        .btn-mark:disabled {
+            background: #6c757d;
+            transform: none;
+            box-shadow: none;
+        }
+        .location-card {
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+            border: 2px solid #e9ecef;
+        }
+        .location-verified {
+            border-color: #28a745;
+            background: #d4edda;
+        }
+        .location-warning {
+            border-color: #ffc107;
+            background: #fff3cd;
+        }
+        .location-error {
+            border-color: #dc3545;
+            background: #f8d7da;
+        }
+        .loading-spinner {
+            border: 3px solid #f3f3f3;
+            border-top: 3px solid #11998e;
+            border-radius: 50%;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        .distance-info {
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+        .face-scan-card {
+            background: #e3f2fd;
+            border: 2px solid #2196f3;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .face-verified {
+            background: #e8f5e8;
+            border-color: #4caf50;
+        }
+        .face-error {
+            background: #ffebee;
+            border-color: #f44336;
+        }
+        #video {
+            width: 100%;
+            max-width: 400px;
+            height: 300px;
+            border-radius: 10px;
+            border: 2px solid #ddd;
+        }
+        .face-overlay {
+            position: relative;
+            display: inline-block;
+        }
+        .face-detection-box {
+            position: absolute;
+            border: 2px solid #00ff00;
+            background: rgba(0, 255, 0, 0.1);
+        }
+    </style>
+</head>
+<body>
+    <div class="container mt-4">
+        <div class="row justify-content-center">
+            <div class="col-lg-6">
+                <!-- Back Button -->
+                <div class="mb-3">
+                    <a href="/employee/dashboard" class="btn btn-light">
+                        <i class="bi bi-arrow-left"></i> Back to Dashboard
+                    </a>
+                </div>
+
+                <div class="attendance-card p-4">
+                    <!-- Header -->
+                    <div class="text-center mb-4">
+                        <div class="mb-3">
+                            <% if (attendanceType === 'MORNING_ENTRY') { %>
+                                <i class="bi bi-sunrise display-3 text-warning"></i>
+                                <h3 class="mt-2">Morning Entry</h3>
+                                <p class="text-muted">Mark your arrival for the day</p>
+                            <% } else if (attendanceType === 'LUNCH_EXIT') { %>
+                                <i class="bi bi-box-arrow-right display-3 text-info"></i>
+                                <h3 class="mt-2">Lunch Exit</h3>
+                                <p class="text-muted">Going for lunch break</p>
+                            <% } else if (attendanceType === 'LUNCH_ENTRY') { %>
+                                <i class="bi bi-box-arrow-in-left display-3 text-success"></i>
+                                <h3 class="mt-2">Lunch Entry</h3>
+                                <p class="text-muted">Back from lunch break</p>
+                            <% } else if (attendanceType === 'END_EXIT') { %>
+                                <i class="bi bi-sunset display-3 text-primary"></i>
+                                <h3 class="mt-2">End Exit</h3>
+                                <p class="text-muted">End of working day</p>
+                            <% } %>
+                        </div>
+                        
+                        <div class="alert alert-info">
+                            <i class="bi bi-info-circle"></i>
+                            <strong><%= employee.name %></strong> (ID: <%= employee.employeeId %>)<br>
+                            <span id="currentTime"></span>
+                        </div>
+                    </div>
+
+                    <!-- Location Status -->
+                    <div id="locationCard" class="location-card mb-4">
+                        <div class="text-center">
+                            <div class="loading-spinner mb-3"></div>
+                            <h5>Detecting your location...</h5>
+                            <p class="text-muted mb-2">Please allow location access when prompted</p>
+                            <small class="text-muted">If no prompt appears, please check your browser location permissions.</small>
+                        </div>
+                    </div>
+
+                    <!-- Face Scanning Section (Hidden initially) -->
+                    <div id="faceScanCard" class="face-scan-card mb-4" style="display: none;">
+                        <div class="text-center">
+                            <h5><i class="bi bi-person-check"></i> Face Verification Required</h5>
+                            <p class="text-muted mb-3">Please look at the camera for face verification</p>
+                            
+                            <div class="face-overlay mb-3">
+                                <video id="video" autoplay muted></video>
+                                <canvas id="overlay" style="position: absolute; top: 0; left: 0; display: none;"></canvas>
+                            </div>
+                            
+                            <div id="faceStatus" class="mb-3">
+                                <div class="loading-spinner mb-2"></div>
+                                <p class="mb-0">Initializing camera...</p>
+                            </div>
+                            
+                            <button id="startFaceScanning" class="btn btn-primary" style="display: none;">
+                                <i class="bi bi-camera"></i> Start Face Scanning
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Attendance Button -->
+                    <div class="text-center mb-4">
+                        <button id="markAttendanceBtn" class="btn btn-mark" disabled>
+                            <i class="bi bi-clock"></i> Mark Attendance
+                        </button>
+                    </div>
+
+                    <!-- Result Area -->
+                    <div id="resultArea"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script>
+        const attendanceType = '<%= attendanceType %>';
+        const companyLocation = {
+            latitude: <%= JSON.stringify(companyLocation.latitude) %>,
+            longitude: <%= JSON.stringify(companyLocation.longitude) %>,
+            address: <%= JSON.stringify(companyLocation.address) %>,
+            radius: <%= JSON.stringify(companyLocation.radius) %>
+        };
+
+        let userLocation = null;
+        let locationAccuracy = null;
+        let faceVerified = false;
+        let video, canvas, ctx;
+        let knownDescriptors = [];
+        let detectionInterval;
+
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleString('en-IN', {
+                weekday: 'long',
+                year: 'numeric',
+                month: 'long',
+                day: 'numeric',
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit',
+                hour12: true
+            });
+            document.getElementById('currentTime').textContent = timeString;
+        }
+
+        // Calculate distance between two coordinates
+        function calculateDistance(lat1, lon1, lat2, lon2) {
+            const R = 6371000; // Earth's radius in meters
+            const φ1 = lat1 * Math.PI / 180;
+            const φ2 = lat2 * Math.PI / 180;
+            const Δφ = (lat2 - lat1) * Math.PI / 180;
+            const Δλ = (lon2 - lon1) * Math.PI / 180;
+
+            const a = Math.sin(Δφ/2) * Math.sin(Δφ/2) +
+                    Math.cos(φ1) * Math.cos(φ2) *
+                    Math.sin(Δλ/2) * Math.sin(Δλ/2);
+            const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
+
+            return R * c; // Distance in meters
+        }
+
+        // Get user location
+        function getUserLocation() {
+            console.log('Starting getUserLocation...');
+            
+            if (!navigator.geolocation) {
+                console.log('Geolocation not supported');
+                showLocationError("Geolocation is not supported by this browser", "Please use a modern browser that supports location services.");
+                return;
+            }
+
+            // Show initial getting location message with immediate manual option
+            updateLocationCard("Getting your location...", "Please allow location access when prompted. If no prompt appears, use manual entry.", "loading");
+
+            const options = {
+                enableHighAccuracy: false, // Changed to false for better compatibility
+                timeout: 10000, // Reduced timeout
+                maximumAge: 300000 // Allow cached location up to 5 minutes old
+            };
+
+            console.log('Calling navigator.geolocation.getCurrentPosition with options:', options);
+
+            // Add immediate fallback for localhost/HTTP issues
+            const quickTimeout = setTimeout(() => {
+                console.log('Quick timeout reached - location may not be working on localhost');
+                showLocationError(
+                    "Location detection is taking too long", 
+                    "This might be because you're on localhost or location permissions are blocked. Please check your browser settings and try again."
+                );
+            }, 5000); // 5 second quick timeout
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    console.log('Location permission granted, position received');
+                    clearTimeout(quickTimeout);
+                    handleLocationSuccess(position);
+                },
+                (error) => {
+                    console.log('Location error occurred');
+                    clearTimeout(quickTimeout);
+                    handleLocationError(error);
+                },
+                options
+            );
+
+            // No manual option
+        }
+
+        // Update location card with custom message
+        function updateLocationCard(title, message, type = "loading") {
+            const locationCard = document.getElementById('locationCard');
+            if (type === "loading") {
+                locationCard.className = 'location-card mb-4';
+                locationCard.innerHTML = `
+                    <div class="text-center">
+                        <div class="loading-spinner mb-3"></div>
+                        <h5>${title}</h5>
+                        <p class="text-muted mb-2">${message}</p>
+                    </div>
+                `;
+            }
+        }
+
+        // Manual location fallback removed
+
+        // Handle successful location retrieval
+        function handleLocationSuccess(position) {
+            console.log('Location success:', position);
+            
+            userLocation = {
+                latitude: position.coords.latitude,
+                longitude: position.coords.longitude
+            };
+            locationAccuracy = position.coords.accuracy;
+
+            console.log('User location:', userLocation);
+            console.log('Location accuracy:', locationAccuracy);
+
+            // Calculate distance from office
+            const distance = calculateDistance(
+                userLocation.latitude,
+                userLocation.longitude,
+                companyLocation.latitude,
+                companyLocation.longitude
+            );
+
+            const isWithinGeofence = distance <= companyLocation.radius;
+            console.log('Distance from office:', distance, 'meters');
+            console.log('Within geofence:', isWithinGeofence);
+
+            // Reverse geocoding to get address
+            getAddressFromCoordinates(userLocation.latitude, userLocation.longitude)
+                .then(address => {
+                    console.log('Address resolved:', address);
+                    showLocationStatus(distance, isWithinGeofence, address);
+                })
+                .catch(error => {
+                    console.log('Address resolution failed:', error);
+                    showLocationStatus(distance, isWithinGeofence, "Location detected");
+                });
+        }
+
+        // Handle location error
+        function handleLocationError(error) {
+            console.log('Location error:', error);
+            console.log('Error code:', error.code);
+            console.log('Error message:', error.message);
+            
+            let message = "Unable to get your location";
+            let suggestion = "";
+            
+            switch(error.code) {
+                case error.PERMISSION_DENIED:
+                    message = "Location access was denied";
+                    suggestion = "Please click the location icon in your browser's address bar and allow location access, then try again.";
+                    break;
+                case error.POSITION_UNAVAILABLE:
+                    message = "Location information is unavailable";
+                    suggestion = "Please make sure your device's location services are enabled and you have a good GPS signal.";
+                    break;
+                case error.TIMEOUT:
+                    message = "Location request timed out";
+                    suggestion = "This might be due to poor GPS signal. Please try again or use manual entry.";
+                    break;
+                default:
+                    suggestion = "Please check your location settings and try again.";
+            }
+            
+            showLocationError(message, suggestion);
+        }
+
+        // Get address from coordinates (simple reverse geocoding)
+        async function getAddressFromCoordinates(lat, lon) {
+            try {
+                // Using a simple reverse geocoding service
+                const response = await fetch(`https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`);
+                const data = await response.json();
+                return data.display_name || data.locality || "Unknown location";
+            } catch (error) {
+                return "Location detected";
+            }
+        }
+
+        // Show location status
+        function showLocationStatus(distance, isWithinGeofence, address) {
+            const locationCard = document.getElementById('locationCard');
+            const markBtn = document.getElementById('markAttendanceBtn');
+            
+            let statusClass = isWithinGeofence ? 'location-verified' : 'location-warning';
+            let statusIcon = isWithinGeofence ? 'bi-geo-alt-fill text-success' : 'bi-geo-alt text-warning';
+            let statusText = isWithinGeofence ? 'Within office area' : 'Outside office area';
+            
+            locationCard.className = `location-card mb-4 ${statusClass}`;
+            locationCard.innerHTML = `
+                <div class="row align-items-center">
+                    <div class="col-auto">
+                        <i class="bi ${statusIcon}" style="font-size: 2rem;"></i>
+                    </div>
+                    <div class="col">
+                        <h6 class="mb-1">${statusText}</h6>
+                        <p class="mb-1"><strong>Your location:</strong> ${address}</p>
+                        <p class="mb-1 distance-info">Distance from office: ${Math.round(distance)}m</p>
+                        <small class="text-muted">Accuracy: ±${Math.round(locationAccuracy)}m</small>
+                    </div>
+                </div>
+                ${!isWithinGeofence ? `
+                <div class="alert alert-warning mt-3 mb-0">
+                    <i class="bi bi-exclamation-triangle"></i>
+                    <strong>Note:</strong> You are outside the office area. Attendance will still be recorded but may require manager approval.
+                </div>
+                ` : ''}
+            `;
+            
+            // Show face scanning after location is verified
+            showFaceScanning();
+        }
+
+        // Show face scanning after location is verified
+        function showFaceScanning() {
+            document.getElementById('faceScanCard').style.display = 'block';
+            initializeFaceRecognition();
+        }
+
+        // Initialize face recognition
+        async function initializeFaceRecognition() {
+            try {
+                console.log('Loading face-api models...');
+                const MODEL_URL = '/models';
+                
+                await Promise.all([
+                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
+                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
+                ]);
+
+                console.log('Models loaded, getting known descriptors...');
+                await loadKnownDescriptors();
+                
+                console.log('Starting camera...');
+                await startCamera();
+                
+            } catch (error) {
+                console.error('Error initializing face recognition:', error);
+                showFaceError('Failed to initialize face recognition: ' + error.message);
+            }
+        }
+
+        // Load known employee descriptors
+        async function loadKnownDescriptors() {
+            try {
+                const response = await fetch('/get-descriptors');
+                const employees = await response.json();
+                
+                knownDescriptors = employees.filter(emp => emp.faceId && emp.faceId.length > 0)
+                    .map(emp => ({
+                        name: emp.name,
+                        descriptor: new Float32Array(emp.faceId)
+                    }));
+                
+                console.log(`Loaded ${knownDescriptors.length} known face descriptors`);
+            } catch (error) {
+                console.error('Error loading descriptors:', error);
+                throw error;
+            }
+        }
+
+        // Start camera
+        async function startCamera() {
+            try {
+                video = document.getElementById('video');
+                canvas = document.getElementById('overlay');
+                
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: { ideal: 640 }, 
+                        height: { ideal: 480 },
+                        facingMode: 'user'
+                    } 
+                });
+                
+                video.srcObject = stream;
+                
+                video.addEventListener('loadedmetadata', () => {
+                    canvas.width = video.videoWidth;
+                    canvas.height = video.videoHeight;
+                    canvas.style.display = 'block';
+                    ctx = canvas.getContext('2d');
+                    
+                    updateFaceStatus('Camera ready. Please look at the camera...', 'info');
+                    startFaceDetection();
+                });
+                
+            } catch (error) {
+                console.error('Camera error:', error);
+                showFaceError('Camera access denied. Please allow camera access and try again.');
+            }
+        }
+
+        // Start face detection
+        function startFaceDetection() {
+            detectionInterval = setInterval(async () => {
+                if (!video || video.paused || video.ended) return;
+                
+                try {
+                    const detections = await faceapi
+                        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions())
+                        .withFaceLandmarks()
+                        .withFaceDescriptor();
+                    
+                    // Clear previous drawings
+                    ctx.clearRect(0, 0, canvas.width, canvas.height);
+                    
+                    if (detections) {
+                        // Draw detection box
+                        const box = detections.detection.box;
+                        ctx.strokeStyle = '#00ff00';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(box.x, box.y, box.width, box.height);
+                        
+                        // Check for face match
+                        const match = findBestMatch(detections.descriptor);
+                        
+                        if (match.distance < 0.6) { // Threshold for recognition
+                            console.log(`Face recognized: ${match.name} (distance: ${match.distance})`);
+                            faceVerified = true;
+                            
+                            // Stop detection
+                            clearInterval(detectionInterval);
+                            video.srcObject.getTracks().forEach(track => track.stop());
+                            
+                            showFaceSuccess(match.name);
+                            
+                            // Enable attendance button
+                            const markBtn = document.getElementById('markAttendanceBtn');
+                            markBtn.disabled = false;
+                            markBtn.innerHTML = '<i class="bi bi-check-circle"></i> Mark Attendance';
+                            
+                        } else {
+                            updateFaceStatus('Face detected but not recognized. Please ensure good lighting and look directly at camera.', 'warning');
+                        }
+                    } else {
+                        updateFaceStatus('Looking for face... Please position yourself in front of the camera.', 'info');
+                    }
+                    
+                } catch (error) {
+                    console.error('Detection error:', error);
+                }
+            }, 1000);
+        }
+
+        // Find best matching face
+        function findBestMatch(descriptor) {
+            let bestMatch = { name: 'unknown', distance: 1.0 };
+            
+            for (const known of knownDescriptors) {
+                const distance = faceapi.euclideanDistance(descriptor, known.descriptor);
+                if (distance < bestMatch.distance) {
+                    bestMatch = { name: known.name, distance };
+                }
+            }
+            
+            return bestMatch;
+        }
+
+        // Update face scanning status
+        function updateFaceStatus(message, type = 'info') {
+            const faceStatus = document.getElementById('faceStatus');
+            let icon = 'bi-camera';
+            let className = 'text-info';
+            
+            if (type === 'warning') {
+                icon = 'bi-exclamation-triangle';
+                className = 'text-warning';
+            } else if (type === 'success') {
+                icon = 'bi-check-circle';
+                className = 'text-success';
+            }
+            
+            faceStatus.innerHTML = `
+                <i class="bi ${icon} ${className}" style="font-size: 1.5rem;"></i>
+                <p class="mb-0 ${className}">${message}</p>
+            `;
+        }
+
+        // Show face verification success
+        function showFaceSuccess(employeeName) {
+            const faceCard = document.getElementById('faceScanCard');
+            faceCard.className = 'face-scan-card face-verified mb-4';
+            faceCard.innerHTML = `
+                <div class="text-center">
+                    <i class="bi bi-person-check-fill text-success" style="font-size: 3rem;"></i>
+                    <h5 class="mt-2 text-success">Face Verified!</h5>
+                    <p class="mb-0">Welcome, <strong>${employeeName}</strong></p>
+                    <small class="text-muted">Identity confirmed. You can now mark attendance.</small>
+                </div>
+            `;
+        }
+
+        // Show face scanning error
+        function showFaceError(message) {
+            const faceCard = document.getElementById('faceScanCard');
+            faceCard.className = 'face-scan-card face-error mb-4';
+            faceCard.innerHTML = `
+                <div class="text-center">
+                    <i class="bi bi-person-x-fill text-danger" style="font-size: 3rem;"></i>
+                    <h5 class="mt-2 text-danger">Face Verification Failed</h5>
+                    <p class="mb-3">${message}</p>
+                    <button class="btn btn-outline-primary" onclick="initializeFaceRecognition()">
+                        <i class="bi bi-arrow-clockwise"></i> Try Again
+                    </button>
+                </div>
+            `;
+        }
+
+        // Show location error
+        function showLocationError(message, suggestion = "") {
+            const locationCard = document.getElementById('locationCard');
+            locationCard.className = 'location-card mb-4 location-error';
+            locationCard.innerHTML = `
+                <div class="text-center">
+                    <i class="bi bi-geo-alt-slash text-danger" style="font-size: 3rem;"></i>
+                    <h5 class="mt-2 text-danger">Location Error</h5>
+                    <p class="mb-2"><strong>${message}</strong></p>
+                    ${suggestion ? `<p class="text-muted mb-3">${suggestion}</p>` : ''}
+                    <div class="d-grid gap-2">
+                        <button class="btn btn-outline-primary" onclick="getUserLocation()">
+                            <i class="bi bi-arrow-clockwise"></i> Try Again
+                        </button>
+                        <!-- Manual location fallback removed -->
+                    </div>
+                </div>
+            `;
+        }
+
+        // Mark attendance
+        async function markAttendance() {
+            console.log('Starting markAttendance function...');
+            
+            if (!userLocation) {
+                console.log('ERROR: No user location available');
+                alert('Please allow location access first');
+                return;
+            }
+
+            if (!faceVerified) {
+                console.log('ERROR: Face not verified');
+                alert('Please complete face verification first');
+                return;
+            }
+
+            console.log('User location available:', userLocation);
+            console.log('Face verified:', faceVerified);
+
+            const markBtn = document.getElementById('markAttendanceBtn');
+            markBtn.disabled = true;
+            markBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Marking...';
+
+            try {
+                // Get current address
+                console.log('Getting address for coordinates:', userLocation);
+                const address = await getAddressFromCoordinates(userLocation.latitude, userLocation.longitude);
+                console.log('Address resolved:', address);
+                
+                const requestData = {
+                    attendanceType,
+                    latitude: userLocation.latitude,
+                    longitude: userLocation.longitude,
+                    address,
+                    accuracy: locationAccuracy
+                };
+
+                console.log('Sending request with data:', requestData);
+                
+                const response = await fetch('/employee/mark-attendance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestData)
+                });
+
+                console.log('Response status:', response.status);
+                console.log('Response headers:', response.headers);
+
+                const result = await response.json();
+                console.log('Response data:', result);
+
+                if (response.ok) {
+                    console.log('SUCCESS: Attendance marked');
+                    showSuccess(result);
+                } else {
+                    console.log('ERROR: Failed to mark attendance');
+                    showError(result.message || 'Unknown error occurred');
+                }
+            } catch (error) {
+                console.error('CATCH: Error marking attendance:', error);
+                showError('Failed to mark attendance. Please try again. Error: ' + error.message);
+            }
+
+            markBtn.disabled = false;
+            markBtn.innerHTML = '<i class="bi bi-clock"></i> Mark Attendance';
+        }
+
+        // Show success message
+        function showSuccess(result) {
+            const resultArea = document.getElementById('resultArea');
+            resultArea.innerHTML = `
+                <div class="alert alert-success text-center">
+                    <i class="bi bi-check-circle-fill" style="font-size: 3rem;"></i>
+                    <h4 class="mt-2">Attendance Marked!</h4>
+                    <p class="mb-1">${result.message}</p>
+                    <hr>
+                    <div class="row text-start">
+                        <div class="col-6">
+                            <strong>Time:</strong><br>
+                            <small>${new Date(result.timestamp).toLocaleString('en-IN')}</small>
+                        </div>
+                        <div class="col-6">
+                            <strong>Distance:</strong><br>
+                            <small>${result.distance}m from office</small>
+                        </div>
+                    </div>
+                    <div class="mt-3">
+                        <a href="/employee/dashboard" class="btn btn-primary">
+                            <i class="bi bi-house"></i> Back to Dashboard
+                        </a>
+                    </div>
+                </div>
+            `;
+
+            // Disable mark button since attendance is already marked
+            document.getElementById('markAttendanceBtn').style.display = 'none';
+        }
+
+        // Show error message
+        function showError(message) {
+            const resultArea = document.getElementById('resultArea');
+            resultArea.innerHTML = `
+                <div class="alert alert-danger text-center">
+                    <i class="bi bi-exclamation-triangle-fill" style="font-size: 2rem;"></i>
+                    <h5 class="mt-2">Error</h5>
+                    <p class="mb-0">${message}</p>
+                </div>
+            `;
+        }
+
+        // Event listeners
+        document.getElementById('markAttendanceBtn').addEventListener('click', markAttendance);
+
+        // Initialize
+        updateTime();
+        setInterval(updateTime, 1000);
+        
+        // Debug location API
+        console.log('Initializing location detection...');
+        console.log('Navigator geolocation available:', !!navigator.geolocation);
+        console.log('HTTPS protocol:', location.protocol === 'https:');
+        console.log('User agent:', navigator.userAgent);
+        
+        // Start location detection
+        getUserLocation();
+    </script>
+</body>
+</html>

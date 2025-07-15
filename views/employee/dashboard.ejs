@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Employee Portal - <%= employee.name %></title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css" rel="stylesheet">
+    <style>
+        body {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .dashboard-card {
+            background: rgba(255, 255, 255, 0.95);
+            backdrop-filter: blur(10px);
+            border-radius: 20px;
+            box-shadow: 0 15px 35px rgba(0, 0, 0, 0.2);
+            border: none;
+        }
+        .attendance-btn {
+            border-radius: 15px;
+            padding: 20px 25px;
+            font-weight: 600;
+            text-decoration: none;
+            display: block;
+            text-align: center;
+            transition: all 0.3s ease;
+            margin-bottom: 15px;
+        }
+        .btn-morning {
+            background: linear-gradient(135deg, #ffd89b 0%, #19547b 100%);
+            color: white;
+        }
+        .btn-lunch-exit {
+            background: linear-gradient(135deg, #ff9a9e 0%, #fecfef 100%);
+            color: #333;
+        }
+        .btn-lunch-entry {
+            background: linear-gradient(135deg, #a8edea 0%, #fed6e3 100%);
+            color: #333;
+        }
+        .btn-end {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .btn-completed {
+            background: #28a745;
+            color: white;
+            opacity: 0.7;
+            cursor: not-allowed;
+        }
+        .btn-disabled {
+            background: #f8f9fa;
+            color: #6c757d;
+            cursor: not-allowed;
+            border: 2px dashed #dee2e6;
+        }
+        .status-card {
+            background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+            color: white;
+            border-radius: 15px;
+        }
+        .time-card {
+            background: rgba(255, 255, 255, 0.9);
+            border-radius: 10px;
+            padding: 15px;
+            margin-bottom: 10px;
+            border-left: 4px solid;
+        }
+        .morning { border-left-color: #ffd89b; }
+        .lunch-exit { border-left-color: #ff9a9e; }
+        .lunch-entry { border-left-color: #a8edea; }
+        .end { border-left-color: #667eea; }
+        
+        #currentTime {
+            font-family: 'Courier New', monospace;
+            font-size: 1.2em;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav class="navbar navbar-expand-lg navbar-dark" style="background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);">
+        <div class="container">
+            <span class="navbar-brand">
+                <i class="bi bi-person-circle"></i> <%= employee.name %>
+            </span>
+            <div class="d-flex">
+                <span class="navbar-text me-3" id="currentTime"></span>
+                <a href="/employee/logout" class="btn btn-light btn-sm">
+                    <i class="bi bi-box-arrow-right"></i> Logout
+                </a>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mt-4">
+        <!-- Welcome Header -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="status-card p-4 text-center">
+                    <h2><i class="bi bi-calendar-check"></i> Welcome, <%= employee.name %>!</h2>
+                    <p class="mb-0">Employee ID: <%= employee.employeeId %></p>
+                    <p class="mb-0"><%= new Date().toLocaleDateString('en-IN', { weekday: 'long', year: 'numeric', month: 'long', day: 'numeric' }) %></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="row justify-content-center">
+            <!-- Attendance Actions -->
+            <div class="col-lg-8">
+                <div class="dashboard-card p-4 mb-4">
+                    <h4 class="mb-4 text-center"><i class="bi bi-clock-history"></i> Mark Your Attendance</h4>
+                    
+                    <div class="row g-3">
+                        <!-- Morning Entry -->
+                        <div class="col-md-6">
+                            <% const morningCompleted = todayAttendance.some(a => a.attendanceType === 'MORNING_ENTRY'); %>
+                            <% if (morningCompleted) { %>
+                                <div class="attendance-btn btn-completed">
+                                    <i class="bi bi-check-circle-fill"></i><br>
+                                    <strong>Morning Entry</strong><br>
+                                    <small>✓ Completed at <%= todayAttendance.find(a => a.attendanceType === 'MORNING_ENTRY').timestamp.toLocaleTimeString('en-IN') %></small>
+                                </div>
+                            <% } else if (nextType === 'MORNING_ENTRY') { %>
+                                <a href="/employee/mark-attendance?type=MORNING_ENTRY" class="attendance-btn btn-morning">
+                                    <i class="bi bi-sunrise"></i><br>
+                                    <strong>Morning Entry</strong><br>
+                                    <small>Mark your arrival</small>
+                                </a>
+                            <% } else { %>
+                                <div class="attendance-btn btn-disabled">
+                                    <i class="bi bi-sunrise"></i><br>
+                                    <strong>Morning Entry</strong><br>
+                                    <small>Complete previous steps first</small>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- Lunch Exit -->
+                        <div class="col-md-6">
+                            <% const lunchExitCompleted = todayAttendance.some(a => a.attendanceType === 'LUNCH_EXIT'); %>
+                            <% if (lunchExitCompleted) { %>
+                                <div class="attendance-btn btn-completed">
+                                    <i class="bi bi-check-circle-fill"></i><br>
+                                    <strong>Lunch Exit</strong><br>
+                                    <small>✓ Completed at <%= todayAttendance.find(a => a.attendanceType === 'LUNCH_EXIT').timestamp.toLocaleTimeString('en-IN') %></small>
+                                </div>
+                            <% } else if (nextType === 'LUNCH_EXIT') { %>
+                                <a href="/employee/mark-attendance?type=LUNCH_EXIT" class="attendance-btn btn-lunch-exit">
+                                    <i class="bi bi-box-arrow-right"></i><br>
+                                    <strong>Lunch Exit</strong><br>
+                                    <small>Going for lunch</small>
+                                </a>
+                            <% } else { %>
+                                <div class="attendance-btn btn-disabled">
+                                    <i class="bi bi-box-arrow-right"></i><br>
+                                    <strong>Lunch Exit</strong><br>
+                                    <small>Complete previous steps first</small>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- Lunch Entry -->
+                        <div class="col-md-6">
+                            <% const lunchEntryCompleted = todayAttendance.some(a => a.attendanceType === 'LUNCH_ENTRY'); %>
+                            <% if (lunchEntryCompleted) { %>
+                                <div class="attendance-btn btn-completed">
+                                    <i class="bi bi-check-circle-fill"></i><br>
+                                    <strong>Lunch Entry</strong><br>
+                                    <small>✓ Completed at <%= todayAttendance.find(a => a.attendanceType === 'LUNCH_ENTRY').timestamp.toLocaleTimeString('en-IN') %></small>
+                                </div>
+                            <% } else if (nextType === 'LUNCH_ENTRY') { %>
+                                <a href="/employee/mark-attendance?type=LUNCH_ENTRY" class="attendance-btn btn-lunch-entry">
+                                    <i class="bi bi-box-arrow-in-left"></i><br>
+                                    <strong>Lunch Entry</strong><br>
+                                    <small>Back from lunch</small>
+                                </a>
+                            <% } else { %>
+                                <div class="attendance-btn btn-disabled">
+                                    <i class="bi bi-box-arrow-in-left"></i><br>
+                                    <strong>Lunch Entry</strong><br>
+                                    <small>Complete previous steps first</small>
+                                </div>
+                            <% } %>
+                        </div>
+
+                        <!-- End Exit -->
+                        <div class="col-md-6">
+                            <% const endCompleted = todayAttendance.some(a => a.attendanceType === 'END_EXIT'); %>
+                            <% if (endCompleted) { %>
+                                <div class="attendance-btn btn-completed">
+                                    <i class="bi bi-check-circle-fill"></i><br>
+                                    <strong>End Exit</strong><br>
+                                    <small>✓ Completed at <%= todayAttendance.find(a => a.attendanceType === 'END_EXIT').timestamp.toLocaleTimeString('en-IN') %></small>
+                                </div>
+                            <% } else if (nextType === 'END_EXIT') { %>
+                                <a href="/employee/mark-attendance?type=END_EXIT" class="attendance-btn btn-end">
+                                    <i class="bi bi-sunset"></i><br>
+                                    <strong>End Exit</strong><br>
+                                    <small>End of day</small>
+                                </a>
+                            <% } else { %>
+                                <div class="attendance-btn btn-disabled">
+                                    <i class="bi bi-sunset"></i><br>
+                                    <strong>End Exit</strong><br>
+                                    <small>Complete previous steps first</small>
+                                </div>
+                            <% } %>
+                        </div>
+                    </div>
+
+                    <!-- Instructions -->
+                    <div class="text-center mt-4 p-3" style="background: #f8f9fa; border-radius: 10px;">
+                        <h6><i class="bi bi-info-circle text-primary"></i> How it works:</h6>
+                        <small class="text-muted">
+                            Complete attendance in order: Morning Entry → Lunch Exit → Lunch Entry → End Exit<br>
+                            Each step requires location verification for accurate tracking.
+                        </small>
+                    </div>
+                </div>
+
+                <!-- Office Location Info -->
+                <div class="dashboard-card p-4">
+                    <h6><i class="bi bi-geo-alt-fill text-primary"></i> Office Location</h6>
+                    <p class="mb-2"><strong>LG Best Shop - LAXMI MARUTHI ELECTRONICS</strong></p>
+                    <small class="text-muted">
+                        SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd<br>
+                        beside POLICE STATION, Piduguralla, Andhra Pradesh 522413<br>
+                        <i class="bi bi-bullseye text-success"></i> Detection radius: 200 meters
+                    </small>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        // Update current time
+        function updateTime() {
+            const now = new Date();
+            const timeString = now.toLocaleTimeString('en-IN', {
+                hour12: true,
+                hour: '2-digit',
+                minute: '2-digit',
+                second: '2-digit'
+            });
+            document.getElementById('currentTime').textContent = timeString;
+        }
+
+        // Update time immediately and then every second
+        updateTime();
+        setInterval(updateTime, 1000);
+
+        // Auto-refresh page every 5 minutes to update attendance status
+        setTimeout(() => {
+            window.location.reload();
+        }, 5 * 60 * 1000); // 5 minutes
+    </script>
+</body>
+</html>
