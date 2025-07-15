@@ -215,41 +215,49 @@
         
         console.log("Starting to load face-api models...");
         
-        // Load models one by one to see which one fails
-        try {
-          console.log("Loading tinyFaceDetector...");
-          await faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector');
-          console.log("✅ tinyFaceDetector loaded");
-        } catch (err) {
-          console.error("❌ Failed to load tinyFaceDetector:", err);
-          throw err;
-        }
+        // Try loading from local models first, fallback to CDN
+        const modelPaths = [
+          '/models', // Local models
+          'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights' // CDN fallback
+        ];
         
-        // Try to load SSD MobileNet for better detection
-        try {
-          console.log("Loading ssdMobilenetv1...");
-          await faceapi.nets.ssdMobilenetv1.loadFromUri('/models/ssd_mobilenetv1');
-          console.log("✅ ssdMobilenetv1 loaded");
-        } catch (err) {
-          console.warn("⚠️ Failed to load ssdMobilenetv1 (optional):", err);
-        }
+        let modelsLoadedSuccessfully = false;
         
-        try {
-          console.log("Loading faceRecognitionNet...");
-          await faceapi.nets.faceRecognitionNet.loadFromUri('/models/face_recognition');
-          console.log("✅ faceRecognitionNet loaded");
-        } catch (err) {
-          console.error("❌ Failed to load faceRecognitionNet:", err);
-          throw err;
-        }
-        
-        try {
-          console.log("Loading faceLandmark68Net...");
-          await faceapi.nets.faceLandmark68Net.loadFromUri('/models/face_landmark_68');
-          console.log("✅ faceLandmark68Net loaded");
-        } catch (err) {
-          console.error("❌ Failed to load faceLandmark68Net:", err);
-          throw err;
+        for (const modelPath of modelPaths) {
+          try {
+            console.log(`Trying to load models from: ${modelPath}`);
+            
+            console.log("Loading tinyFaceDetector...");
+            await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
+            console.log("✅ tinyFaceDetector loaded");
+            
+            console.log("Loading faceRecognitionNet...");
+            await faceapi.nets.faceRecognitionNet.loadFromUri(modelPath);
+            console.log("✅ faceRecognitionNet loaded");
+            
+            console.log("Loading faceLandmark68Net...");
+            await faceapi.nets.faceLandmark68Net.loadFromUri(modelPath);
+            console.log("✅ faceLandmark68Net loaded");
+            
+            // Try to load SSD MobileNet for better detection (optional)
+            try {
+              console.log("Loading ssdMobilenetv1...");
+              await faceapi.nets.ssdMobilenetv1.loadFromUri(modelPath);
+              console.log("✅ ssdMobilenetv1 loaded");
+            } catch (err) {
+              console.warn("⚠️ ssdMobilenetv1 not available (optional):", err);
+            }
+            
+            modelsLoadedSuccessfully = true;
+            console.log(`🎉 All models loaded successfully from: ${modelPath}`);
+            break;
+            
+          } catch (err) {
+            console.warn(`❌ Failed to load models from ${modelPath}:`, err);
+            if (modelPath === modelPaths[modelPaths.length - 1]) {
+              throw new Error('Failed to load models from all sources');
+            }
+          }
         }
         
         modelsLoaded = true;

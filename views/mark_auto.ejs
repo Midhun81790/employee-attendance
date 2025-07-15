@@ -316,9 +316,33 @@
             try {
                 updateStatus("Loading AI models...", "warning");
                 
-                await faceapi.nets.tinyFaceDetector.loadFromUri('/models/tiny_face_detector');
-                await faceapi.nets.faceRecognitionNet.loadFromUri('/models/face_recognition');
-                await faceapi.nets.faceLandmark68Net.loadFromUri('/models/face_landmark_68');
+                // Try loading from local models first, fallback to CDN
+                const modelPaths = [
+                    '/models', // Local models
+                    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights' // CDN fallback
+                ];
+                
+                let modelsLoadedSuccessfully = false;
+                
+                for (const modelPath of modelPaths) {
+                    try {
+                        console.log(`Trying to load models from: ${modelPath}`);
+                        
+                        await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
+                        await faceapi.nets.faceRecognitionNet.loadFromUri(modelPath);
+                        await faceapi.nets.faceLandmark68Net.loadFromUri(modelPath);
+                        
+                        modelsLoadedSuccessfully = true;
+                        console.log(`🎉 Models loaded successfully from: ${modelPath}`);
+                        break;
+                        
+                    } catch (err) {
+                        console.warn(`❌ Failed to load models from ${modelPath}:`, err);
+                        if (modelPath === modelPaths[modelPaths.length - 1]) {
+                            throw new Error('Failed to load models from all sources');
+                        }
+                    }
+                }
                 
                 modelsLoaded = true;
                 updateStatus("AI models loaded", "success");

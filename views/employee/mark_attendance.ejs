@@ -427,13 +427,36 @@
         async function initializeFaceRecognition() {
             try {
                 console.log('Loading face-api models...');
-                const MODEL_URL = '/models';
                 
-                await Promise.all([
-                    faceapi.nets.tinyFaceDetector.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceRecognitionNet.loadFromUri(MODEL_URL),
-                    faceapi.nets.faceLandmark68Net.loadFromUri(MODEL_URL)
-                ]);
+                // Try loading from local models first, fallback to CDN
+                const modelPaths = [
+                    '/models', // Local models
+                    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights' // CDN fallback
+                ];
+                
+                let modelsLoadedSuccessfully = false;
+                
+                for (const modelPath of modelPaths) {
+                    try {
+                        console.log(`Trying to load models from: ${modelPath}`);
+                        
+                        await Promise.all([
+                            faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+                            faceapi.nets.faceRecognitionNet.loadFromUri(modelPath),
+                            faceapi.nets.faceLandmark68Net.loadFromUri(modelPath)
+                        ]);
+                        
+                        modelsLoadedSuccessfully = true;
+                        console.log(`🎉 Models loaded successfully from: ${modelPath}`);
+                        break;
+                        
+                    } catch (err) {
+                        console.warn(`❌ Failed to load models from ${modelPath}:`, err);
+                        if (modelPath === modelPaths[modelPaths.length - 1]) {
+                            throw new Error('Failed to load models from all sources');
+                        }
+                    }
+                }
 
                 console.log('Models loaded, getting known descriptors...');
                 await loadKnownDescriptors();
