@@ -55,6 +55,14 @@ app.set("views", path.join(__dirname, "views"));
 mongoose.connect(process.env.MONGO_URI)
 .then(() => {
   console.log("✅ MongoDB Connected Successfully");
+  
+  // Initialize monthly report scheduler after DB connection
+  const MonthlyReportScheduler = require('./services/monthlyReportScheduler');
+  const scheduler = new MonthlyReportScheduler();
+  scheduler.startScheduler();
+  
+  // Make scheduler available globally for manual triggers
+  global.monthlyScheduler = scheduler;
 })
 .catch(err => {
   console.error("❌ MongoDB Connection Error:", err.message);
@@ -64,10 +72,12 @@ mongoose.connect(process.env.MONGO_URI)
 // Routes
 const mainRoutes = require("./routes/main");
 const employeeRoutes = require("./routes/employee");
+const attendanceAPIRoutes = require("./routes/attendanceAPI");
 
 // The more specific employee routes must be registered before the general routes
 // to avoid being caught by the main router's wildcard handlers.
 app.use("/employee", employeeRoutes);
+app.use("/api/attendance", attendanceAPIRoutes);
 app.use("/", mainRoutes);
 
 // Error handling middleware
