@@ -110,7 +110,7 @@ router.get("/dashboard", async (req, res) => {
       employee: req.session.employeeData,
       todayAttendance,
       nextType,
-      companyLocation: COMPANY_LOCATION
+      companyLocation: getCompanyLocation()
     });
   } catch (err) {
     console.error("Error loading employee dashboard:", err);
@@ -130,7 +130,7 @@ router.get("/mark-attendance", (req, res) => {
   res.render("employee/mark_attendance", {
     employee: req.session.employeeData,
     attendanceType: type,
-    companyLocation: COMPANY_LOCATION
+    companyLocation: getCompanyLocation()
   });
 });
 
