@@ -1,10 +1,10 @@
 {
   "shopLocation": {
-    "latitude": 16.4776872,
-    "longitude": 79.8833104,
+    "latitude": 16.4889184,
+    "longitude": 79.8856714,
     "address": "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
-    "radius": 200
+    "radius": 500
   },
-  "lastUpdated": "2025-07-22T13:30:00.000Z",
+  "lastUpdated": "2025-07-22T14:45:00.000Z",
   "updatedBy": "admin"
 }
