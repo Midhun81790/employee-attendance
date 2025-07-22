@@ -164,6 +164,14 @@ router.post("/mark-attendance", async (req, res) => {
   });
 
   try {
+    // Validate the employee ID exists first
+    const employeeExists = await Employee.findById(req.session.employeeData.id);
+    if (!employeeExists) {
+      console.log("ERROR: Employee not found in database:", req.session.employeeData.id);
+      return res.status(400).json({ message: "Employee not found" });
+    }
+    console.log("Employee found:", employeeExists.name);
+
     // Validate attendance type
     if (!["MORNING_ENTRY", "LUNCH_EXIT", "LUNCH_ENTRY", "END_EXIT"].includes(attendanceType)) {
       console.log("ERROR: Invalid attendance type:", attendanceType);
@@ -251,14 +259,6 @@ router.post("/mark-attendance", async (req, res) => {
     };
 
     console.log("Creating attendance with data:", attendanceData);
-
-    // Validate the employee ID exists
-    const employeeExists = await Employee.findById(req.session.employeeData.id);
-    if (!employeeExists) {
-      console.log("ERROR: Employee not found in database:", req.session.employeeData.id);
-      return res.status(400).json({ message: "Employee not found" });
-    }
-    console.log("Employee found:", employeeExists.name);
 
     const attendance = new Attendance(attendanceData);
     
