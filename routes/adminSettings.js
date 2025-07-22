@@ -1,7 +1,7 @@
 // Admin Settings for Location Management
 const express = require("express");
 const router = express.Router();
-const fs = require('fs').promises;
+const fs = require('fs');
 const path = require('path');
 const Employee = require("../models/Employee");
 const Attendance = require("../models/Attendance");
@@ -9,6 +9,25 @@ const NotificationService = require("../services/whatsappService");
 
 // Initialize notification service
 const notificationService = new NotificationService();
+
+// Load company location from config file
+function getCompanyLocation() {
+  try {
+    const configPath = path.join(__dirname, '..', 'config', 'location.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(configData);
+    return config.shopLocation;
+  } catch (error) {
+    console.error("Error loading location config:", error);
+    // Fallback to default location
+    return {
+      latitude: 15.227778,
+      longitude: 79.885556,
+      address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
+      radius: 200
+    };
+  }
+}
 
 // Admin settings interface
 router.get("/settings", (req, res) => {
@@ -193,12 +212,25 @@ router.post("/mark-attendance", async (req, res) => {
       });
     }
 
+    // Get current location from config file
+    const currentLocation = getCompanyLocation();
+
     // Create attendance record with admin override
     const attendance = new Attendance({
       employee: recognizedEmployee._id,
       attendanceType,
       timestamp: new Date(),
-      location: "Admin Override - Office Location",
+      location: {
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        address: `${currentLocation.address} (Admin Scanner)`,
+        accuracy: 0
+      },
+      deviceInfo: {
+        userAgent: 'Admin Scanner',
+        platform: 'Admin Panel',
+        ipAddress: req.ip || req.connection.remoteAddress
+      },
       isWithinGeofence: true, // Admin override
       adminMarked: true,
       markedBy: "admin"

@@ -2,6 +2,8 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
+const fs = require('fs');
+const path = require('path');
 const Employee = require("../models/Employee");
 const EmployeeCredential = require("../models/EmployeeCredential");
 const Attendance = require("../models/Attendance");
@@ -9,6 +11,25 @@ const Attendance = require("../models/Attendance");
 // Load environment variables
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
+
+// Load company location from config file
+function getCompanyLocation() {
+  try {
+    const configPath = path.join(__dirname, '..', 'config', 'location.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(configData);
+    return config.shopLocation;
+  } catch (error) {
+    console.error("Error loading location config:", error);
+    // Fallback to default location
+    return {
+      latitude: 15.227778,
+      longitude: 79.885556,
+      address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
+      radius: 200
+    };
+  }
+}
 
 // Login Page
 router.get("/", (req, res) => {
@@ -22,6 +43,7 @@ router.post("/login", (req, res) => {
 
   if (email === ADMIN_EMAIL && password === ADMIN_PASSWORD) {
     req.session.isLoggedIn = true;
+    req.session.adminLoggedIn = true; // Add admin session flag
     return res.redirect("/dashboard");
   } else {
     return res.render("login", { error: "Invalid Email or Password" });
@@ -125,14 +147,17 @@ router.post("/mark-attendance", async (req, res) => {
       return res.json({ message: `Morning attendance already marked today for ${employee.name}` });
     }
 
-    // Create attendance record with default location (office location)
+    // Get current location from config file
+    const currentLocation = getCompanyLocation();
+
+    // Create attendance record with dynamic location
     const attendance = new Attendance({ 
       employee: employee._id,
       attendanceType: "MORNING_ENTRY",
       location: {
-        latitude: 15.227778, // Default to office location
-        longitude: 79.885556,
-        address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, Piduguralla (Face Recognition Entry)",
+        latitude: currentLocation.latitude,
+        longitude: currentLocation.longitude,
+        address: `${currentLocation.address} (Face Recognition Entry)`,
         accuracy: 0
       },
       deviceInfo: {

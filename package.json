@@ -12,24 +12,30 @@
     "build": "bash render-build.sh",
     "test": "echo \"Error: no test specified\" && exit 1"
   },
-  "keywords": ["attendance", "face-recognition", "geolocation", "employee-management"],
+  "keywords": [
+    "attendance",
+    "face-recognition",
+    "geolocation",
+    "employee-management"
+  ],
   "author": "",
   "license": "ISC",
   "description": "Employee Attendance System with Face Recognition and Geolocation",
   "dependencies": {
+    "archiver": "^6.0.1",
+    "axios": "^1.6.0",
     "body-parser": "^2.2.0",
     "cookie-parser": "^1.4.7",
+    "csv-writer": "^1.6.0",
     "dotenv": "^17.2.0",
     "ejs": "^3.1.10",
     "express": "^5.1.0",
     "express-session": "^1.18.1",
+    "face-api.js": "^0.22.2",
     "mongoose": "^8.16.3",
     "multer": "^2.0.1",
-    "nodemailer": "^6.9.8",
-    "csv-writer": "^1.6.0",
     "node-cron": "^3.0.3",
-    "archiver": "^6.0.1",
-    "axios": "^1.6.0"
+    "nodemailer": "^6.9.8"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"
