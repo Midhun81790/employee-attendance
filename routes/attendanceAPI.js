@@ -7,6 +7,7 @@ const createCsvWriter = require('csv-writer').createObjectCsvWriter;
 const nodemailer = require('nodemailer');
 const path = require('path');
 const fs = require('fs');
+const NotificationService = require('../services/whatsappService');
 
 // Email configuration
 const emailConfig = {
@@ -292,7 +293,7 @@ router.get('/export/monthly', async (req, res) => {
     await csvWriter.writeRecords(csvData);
 
     // Send email with attachment
-    const transporter = nodemailer.createTransporter(emailConfig);
+    const transporter = nodemailer.createTransport(emailConfig);
 
     // Create summary
     const summary = Object.values(employeeData).map(emp => 
@@ -354,6 +355,81 @@ router.post('/trigger/monthly-report', async (req, res) => {
   } catch (error) {
     console.error('Error triggering monthly report:', error);
     res.status(500).json({ message: 'Failed to trigger monthly report', error: error.message });
+  }
+});
+
+// Notification API endpoints for testing and manual triggers
+const notificationService = new NotificationService();
+
+// Get notification service status
+router.get('/whatsapp/status', async (req, res) => {
+  try {
+    const status = notificationService.getStatus();
+    res.json(status);
+  } catch (error) {
+    console.error('Error getting notification status:', error);
+    res.status(500).json({ message: 'Failed to get WhatsApp status', error: error.message });
+  }
+});
+
+// Test notification connection
+router.post('/whatsapp/test', async (req, res) => {
+  try {
+    const result = await notificationService.testConnection();
+    res.json(result);
+  } catch (error) {
+    console.error('Error testing WhatsApp:', error);
+    res.status(500).json({ message: 'Failed to test WhatsApp', error: error.message });
+  }
+});
+
+// Send manual daily summary
+router.post('/whatsapp/daily-summary', async (req, res) => {
+  try {
+    const { date } = req.body;
+    const targetDate = date ? new Date(date) : new Date();
+    
+    const startOfDay = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+    const endOfDay = new Date(startOfDay);
+    endOfDay.setDate(endOfDay.getDate() + 1);
+
+    // Get attendance records for the specified date
+    const records = await Attendance.find({
+      timestamp: { $gte: startOfDay, $lt: endOfDay },
+      isWithinGeofence: true
+    }).populate('employee', 'name');
+
+    const dateStr = targetDate.toLocaleDateString('en-IN');
+    const result = await notificationService.sendDailySummary(dateStr, records);
+    
+    res.json({
+      ...result,
+      date: dateStr,
+      recordCount: records.length
+    });
+  } catch (error) {
+    console.error('Error sending daily summary:', error);
+    res.status(500).json({ message: 'Failed to send daily summary', error: error.message });
+  }
+});
+
+// Send manual attendance notification
+router.post('/whatsapp/attendance-notification', async (req, res) => {
+  try {
+    const { employeeName, attendanceType, timestamp, location, isValidLocation } = req.body;
+    
+    const result = await notificationService.sendAttendanceNotification(
+      employeeName, 
+      attendanceType, 
+      timestamp || new Date(), 
+      location, 
+      isValidLocation
+    );
+    
+    res.json(result);
+  } catch (error) {
+    console.error('Error sending attendance notification:', error);
+    res.status(500).json({ message: 'Failed to send notification', error: error.message });
   }
 });
 

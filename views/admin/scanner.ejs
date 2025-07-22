@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Admin Attendance Scanner - Employee Attendance</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        .scanner-header {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            color: white;
+            padding: 2rem 0;
+            margin-bottom: 2rem;
+        }
+        .scanner-card {
+            border: none;
+            box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+            border-radius: 15px;
+            margin-bottom: 2rem;
+        }
+        .video-container {
+            position: relative;
+            background: #000;
+            border-radius: 10px;
+            overflow: hidden;
+        }
+        #video {
+            width: 100%;
+            height: 400px;
+            object-fit: cover;
+        }
+        .overlay {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            text-align: center;
+            z-index: 10;
+        }
+        .btn-scan {
+            background: linear-gradient(135deg, #28a745 0%, #20c997 100%);
+            border: none;
+            padding: 12px 30px;
+            border-radius: 25px;
+            color: white;
+            font-weight: bold;
+        }
+        .btn-scan:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 8px rgba(0, 0, 0, 0.2);
+            color: white;
+        }
+        .attendance-type-btn {
+            margin: 5px;
+            padding: 10px 20px;
+            border-radius: 20px;
+            border: 2px solid;
+            transition: all 0.3s;
+        }
+        .attendance-type-btn.active {
+            transform: scale(1.05);
+            font-weight: bold;
+        }
+        .result-area {
+            min-height: 200px;
+            background: #f8f9fa;
+            border-radius: 10px;
+            padding: 20px;
+        }
+        .employee-info {
+            background: white;
+            border-radius: 10px;
+            padding: 15px;
+            margin: 10px 0;
+            border-left: 4px solid #28a745;
+        }
+        .location-status {
+            padding: 10px;
+            border-radius: 5px;
+            margin: 10px 0;
+        }
+        .location-valid {
+            background: #d4edda;
+            color: #155724;
+            border: 1px solid #c3e6cb;
+        }
+        .location-invalid {
+            background: #f8d7da;
+            color: #721c24;
+            border: 1px solid #f5c6cb;
+        }
+    </style>
+</head>
+<body class="bg-light">
+    <!-- Header -->
+    <div class="scanner-header">
+        <div class="container">
+            <h1 class="mb-0"><i class="fas fa-scan-qr me-3"></i>Admin Attendance Scanner</h1>
+            <p class="mb-0 mt-2">Scan faces and mark attendance for all entry/exit types</p>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Navigation -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <nav aria-label="breadcrumb">
+                    <ol class="breadcrumb">
+                        <li class="breadcrumb-item"><a href="/dashboard" class="text-decoration-none">Dashboard</a></li>
+                        <li class="breadcrumb-item active">Admin Scanner</li>
+                    </ol>
+                </nav>
+            </div>
+        </div>
+
+        <div class="row">
+            <!-- Scanner Section -->
+            <div class="col-lg-8">
+                <div class="card scanner-card">
+                    <div class="card-header bg-success text-white">
+                        <h5 class="mb-0"><i class="fas fa-camera me-2"></i>Face Recognition Scanner</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="video-container">
+                            <video id="video" autoplay muted playsinline></video>
+                            <div class="overlay" id="overlay">
+                                <i class="fas fa-camera fa-3x mb-3"></i>
+                                <h4>Click "Start Scanner" to begin</h4>
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3 text-center">
+                            <button id="startButton" class="btn btn-scan me-2">
+                                <i class="fas fa-play me-2"></i>Start Scanner
+                            </button>
+                            <button id="stopButton" class="btn btn-outline-secondary" disabled>
+                                <i class="fas fa-stop me-2"></i>Stop Scanner
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Controls Section -->
+            <div class="col-lg-4">
+                <div class="card scanner-card">
+                    <div class="card-header bg-primary text-white">
+                        <h5 class="mb-0"><i class="fas fa-cog me-2"></i>Attendance Type</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="text-center">
+                            <button class="btn btn-success attendance-type-btn active" data-type="MORNING_ENTRY">
+                                <i class="fas fa-sun me-1"></i>Morning Entry
+                            </button>
+                            <button class="btn btn-warning attendance-type-btn" data-type="LUNCH_EXIT">
+                                <i class="fas fa-utensils me-1"></i>Lunch Exit
+                            </button>
+                            <button class="btn btn-info attendance-type-btn" data-type="LUNCH_ENTRY">
+                                <i class="fas fa-coffee me-1"></i>Lunch Return
+                            </button>
+                            <button class="btn btn-danger attendance-type-btn" data-type="END_EXIT">
+                                <i class="fas fa-moon me-1"></i>Evening Exit
+                            </button>
+                        </div>
+                        
+                        <div class="mt-4">
+                            <h6 class="text-primary">Current Selection:</h6>
+                            <div class="alert alert-success" id="currentType">
+                                <i class="fas fa-sun me-2"></i>Morning Entry
+                            </div>
+                        </div>
+                        
+                        <div class="mt-3">
+                            <h6 class="text-primary">Location Status:</h6>
+                            <div class="location-status location-valid">
+                                <i class="fas fa-map-marker-alt me-2"></i>Admin Override Active
+                                <small class="d-block mt-1">Location validation bypassed for admin</small>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Section -->
+        <div class="row">
+            <div class="col-12">
+                <div class="card scanner-card">
+                    <div class="card-header bg-info text-white">
+                        <h5 class="mb-0"><i class="fas fa-list me-2"></i>Scan Results</h5>
+                    </div>
+                    <div class="card-body">
+                        <div class="result-area" id="results">
+                            <div class="text-center text-muted">
+                                <i class="fas fa-user-clock fa-3x mb-3"></i>
+                                <h5>Ready to scan</h5>
+                                <p>Start the camera and position an employee's face in view to begin attendance marking.</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Include face-api.js -->
+    <script src="/models/face-api.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    
+    <script>
+        let video, canvas, isScanning = false;
+        let selectedAttendanceType = 'MORNING_ENTRY';
+
+        // Initialize page
+        document.addEventListener('DOMContentLoaded', function() {
+            video = document.getElementById('video');
+            setupAttendanceTypeButtons();
+            loadFaceAPIModels();
+        });
+
+        // Setup attendance type selection
+        function setupAttendanceTypeButtons() {
+            document.querySelectorAll('.attendance-type-btn').forEach(btn => {
+                btn.addEventListener('click', function() {
+                    // Remove active class from all buttons
+                    document.querySelectorAll('.attendance-type-btn').forEach(b => b.classList.remove('active'));
+                    
+                    // Add active class to clicked button
+                    this.classList.add('active');
+                    
+                    // Update selected type
+                    selectedAttendanceType = this.dataset.type;
+                    
+                    // Update display
+                    const typeDisplay = document.getElementById('currentType');
+                    typeDisplay.innerHTML = this.innerHTML;
+                    
+                    console.log('Selected attendance type:', selectedAttendanceType);
+                });
+            });
+        }
+
+        // Load face-api models
+        async function loadFaceAPIModels() {
+            try {
+                console.log('Loading face-api models...');
+                await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
+                await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
+                await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+                console.log('✅ Face-api models loaded successfully');
+            } catch (error) {
+                console.error('❌ Error loading face-api models:', error);
+                showResult('Error loading face recognition models', 'error');
+            }
+        }
+
+        // Start camera
+        document.getElementById('startButton').addEventListener('click', async function() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({ 
+                    video: { 
+                        width: 640, 
+                        height: 480,
+                        facingMode: 'user'
+                    } 
+                });
+                
+                video.srcObject = stream;
+                document.getElementById('overlay').style.display = 'none';
+                document.getElementById('startButton').disabled = true;
+                document.getElementById('stopButton').disabled = false;
+                
+                isScanning = true;
+                startFaceDetection();
+                
+                showResult('Camera started. Position employee face in view...', 'info');
+                
+            } catch (error) {
+                console.error('Error accessing camera:', error);
+                showResult('Error accessing camera: ' + error.message, 'error');
+            }
+        });
+
+        // Stop camera
+        document.getElementById('stopButton').addEventListener('click', function() {
+            stopCamera();
+        });
+
+        function stopCamera() {
+            if (video.srcObject) {
+                video.srcObject.getTracks().forEach(track => track.stop());
+                video.srcObject = null;
+            }
+            
+            document.getElementById('overlay').style.display = 'block';
+            document.getElementById('startButton').disabled = false;
+            document.getElementById('stopButton').disabled = true;
+            
+            isScanning = false;
+            showResult('Camera stopped', 'info');
+        }
+
+        // Face detection and recognition
+        async function startFaceDetection() {
+            if (!isScanning) return;
+            
+            try {
+                const detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions())
+                    .withFaceLandmarks()
+                    .withFaceDescriptors();
+
+                if (detections.length > 0) {
+                    console.log(`Detected ${detections.length} face(s)`);
+                    
+                    // Get face descriptor
+                    const faceDescriptor = detections[0].descriptor;
+                    
+                    // Send to server for recognition
+                    await recognizeAndMarkAttendance(Array.from(faceDescriptor));
+                }
+                
+                // Continue scanning
+                setTimeout(startFaceDetection, 2000); // Check every 2 seconds
+                
+            } catch (error) {
+                console.error('Face detection error:', error);
+                setTimeout(startFaceDetection, 2000);
+            }
+        }
+
+        // Recognize face and mark attendance
+        async function recognizeAndMarkAttendance(faceDescriptor) {
+            try {
+                showResult('Processing face recognition...', 'info');
+                
+                const response = await fetch('/admin/mark-attendance', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        faceId: faceDescriptor,
+                        attendanceType: selectedAttendanceType,
+                        adminOverride: true
+                    })
+                });
+
+                const result = await response.json();
+                
+                if (result.success) {
+                    showEmployeeResult(result);
+                } else {
+                    showResult(result.message || 'Attendance marking failed', 'error');
+                }
+
+            } catch (error) {
+                console.error('Recognition error:', error);
+                showResult('Error during recognition: ' + error.message, 'error');
+            }
+        }
+
+        // Show employee result
+        function showEmployeeResult(result) {
+            const timestamp = new Date().toLocaleString();
+            const html = `
+                <div class="employee-info">
+                    <div class="row align-items-center">
+                        <div class="col-md-8">
+                            <h5 class="mb-1 text-success">
+                                <i class="fas fa-user-check me-2"></i>
+                                ${result.employee.name}
+                            </h5>
+                            <p class="mb-1">
+                                <i class="fas fa-clock me-2"></i>
+                                <strong>${selectedAttendanceType.replace('_', ' ')}</strong> marked at ${timestamp}
+                            </p>
+                            <p class="mb-0 text-muted">
+                                <i class="fas fa-shield-alt me-2"></i>
+                                Admin Override - Location validation bypassed
+                            </p>
+                        </div>
+                        <div class="col-md-4 text-end">
+                            <span class="badge bg-success fs-6">
+                                <i class="fas fa-check me-1"></i>Success
+                            </span>
+                        </div>
+                    </div>
+                </div>
+            `;
+            
+            document.getElementById('results').innerHTML = html + document.getElementById('results').innerHTML;
+        }
+
+        // Show general result message
+        function showResult(message, type = 'info') {
+            const alertClass = type === 'error' ? 'alert-danger' : 
+                             type === 'success' ? 'alert-success' : 'alert-info';
+            
+            const icon = type === 'error' ? 'fa-exclamation-circle' : 
+                        type === 'success' ? 'fa-check-circle' : 'fa-info-circle';
+            
+            const html = `
+                <div class="alert ${alertClass}">
+                    <i class="fas ${icon} me-2"></i>
+                    ${message}
+                </div>
+            `;
+            
+            document.getElementById('results').innerHTML = html + document.getElementById('results').innerHTML;
+        }
+    </script>
+</body>
+</html>

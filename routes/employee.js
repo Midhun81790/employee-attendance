@@ -4,14 +4,31 @@ const router = express.Router();
 const Employee = require("../models/Employee");
 const EmployeeCredential = require("../models/EmployeeCredential");
 const Attendance = require("../models/Attendance");
+const NotificationService = require("../services/whatsappService");
+const fs = require('fs');
+const path = require('path');
 
-// Company location coordinates (LG Best Shop)
-const COMPANY_LOCATION = {
-  latitude: 15.227778, // Piduguralla coordinates
-  longitude: 79.885556,
-  address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
-  radius: 50 // 50 meters radius - must be very close to the shop
-};
+// Initialize notification service
+const notificationService = new NotificationService();
+
+// Load company location from config file
+function getCompanyLocation() {
+  try {
+    const configPath = path.join(__dirname, '..', 'config', 'location.json');
+    const configData = fs.readFileSync(configPath, 'utf8');
+    const config = JSON.parse(configData);
+    return config.shopLocation;
+  } catch (error) {
+    console.error("Error loading location config:", error);
+    // Fallback to default location
+    return {
+      latitude: 15.227778,
+      longitude: 79.885556,
+      address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
+      radius: 200
+    };
+  }
+}
 
 // Calculate distance between two coordinates (Haversine formula)
 function calculateDistance(lat1, lon1, lat2, lon2) {
@@ -175,6 +192,9 @@ router.post("/mark-attendance", async (req, res) => {
       });
     }
 
+    // Get current company location from config
+    const COMPANY_LOCATION = getCompanyLocation();
+
     // Calculate distance from company location
     const distance = calculateDistance(
       parseFloat(latitude), 
@@ -184,13 +204,14 @@ router.post("/mark-attendance", async (req, res) => {
     );
 
     const isWithinGeofence = distance <= COMPANY_LOCATION.radius;
-    console.log("Distance calculation:", {
-      userLat: latitude,
-      userLon: longitude,
-      companyLat: COMPANY_LOCATION.latitude,
-      companyLon: COMPANY_LOCATION.longitude,
-      distance,
-      isWithinGeofence
+    console.log("📍 Location validation:", {
+      employeeName: employeeExists.name,
+      userCoordinates: { lat: latitude, lng: longitude },
+      shopCoordinates: { lat: COMPANY_LOCATION.latitude, lng: COMPANY_LOCATION.longitude },
+      calculatedDistance: Math.round(distance) + " meters",
+      allowedRadius: COMPANY_LOCATION.radius + " meters",
+      isWithinGeofence: isWithinGeofence,
+      status: isWithinGeofence ? "✅ VALID LOCATION" : "❌ OUTSIDE GEOFENCE"
     });
 
     // STRICT ENFORCEMENT: Block attendance if not within geofence
@@ -254,6 +275,39 @@ router.post("/mark-attendance", async (req, res) => {
     await attendance.save();
 
     console.log("SUCCESS: Attendance saved:", attendance);
+
+    // Send notification (only for valid location attendance)
+    if (isWithinGeofence) {
+      try {
+        // Convert attendance type to standard format
+        let standardType = attendanceType.toLowerCase();
+        if (attendanceType === 'MORNING_ENTRY') standardType = 'check_in';
+        else if (attendanceType === 'END_EXIT') standardType = 'check_out';
+        else if (attendanceType === 'LUNCH_EXIT') standardType = 'break_start';
+        else if (attendanceType === 'LUNCH_ENTRY') standardType = 'break_end';
+
+        console.log("📱 Attempting to send notification for:", employeeExists.name, "Type:", standardType);
+        
+        await notificationService.sendAttendanceNotification(
+          employeeExists.name,
+          standardType,
+          attendance.timestamp,
+          attendance.location,
+          true
+        );
+        console.log("✅ Notification sent successfully for:", employeeExists.name);
+      } catch (notificationError) {
+        console.error("⚠️  Notification failed:", notificationError.message);
+        console.error("⚠️  Notification error stack:", notificationError.stack);
+        // Continue without failing the attendance marking
+      }
+    } else {
+      console.log("🚫 No notification sent - Employee outside geofence:", {
+        employee: employeeExists.name,
+        distance: Math.round(distance),
+        maxDistance: COMPANY_LOCATION.radius
+      });
+    }
 
     res.json({
       message: `${attendanceType.replace('_', ' ')} marked successfully`,

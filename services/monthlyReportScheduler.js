@@ -7,6 +7,7 @@ const nodemailer = require('nodemailer');
 const archiver = require('archiver');
 const path = require('path');
 const fs = require('fs');
+const WhatsAppService = require('./whatsappService');
 
 class MonthlyReportScheduler {
   constructor() {
@@ -20,9 +21,12 @@ class MonthlyReportScheduler {
       }
     };
     
+    // Initialize WhatsApp service
+    this.whatsappService = new WhatsAppService();
+    
     // Only create transporter if credentials are provided
     if (process.env.SMTP_USER && process.env.SMTP_PASS) {
-      this.transporter = nodemailer.createTransporter(this.emailConfig);
+      this.transporter = nodemailer.createTransport(this.emailConfig);
     } else {
       console.log('⚠️  Email credentials not configured. Monthly reports will not be sent automatically.');
       this.transporter = null;
@@ -318,7 +322,44 @@ class MonthlyReportScheduler {
       }
     });
 
+    // Send daily WhatsApp summary at 8:00 PM every day
+    cron.schedule('0 20 * * *', async () => {
+      try {
+        console.log('📱 Generating daily WhatsApp summary...');
+        await this.sendDailyWhatsAppSummary();
+      } catch (error) {
+        console.error('❌ Daily WhatsApp summary failed:', error);
+      }
+    });
+
     console.log('📅 Monthly report scheduler started - Reports will be sent on the 1st of each month at 9:00 AM');
+    console.log('📱 Daily WhatsApp summary scheduled - Summaries will be sent at 8:00 PM every day');
+  }
+
+  // Send daily WhatsApp summary
+  async sendDailyWhatsAppSummary() {
+    try {
+      const today = new Date();
+      const startOfDay = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+      const endOfDay = new Date(startOfDay);
+      endOfDay.setDate(endOfDay.getDate() + 1);
+
+      // Get today's attendance records (only valid location ones)
+      const todaysRecords = await Attendance.find({
+        timestamp: { $gte: startOfDay, $lt: endOfDay },
+        isWithinGeofence: true
+      }).populate('employee', 'name');
+
+      if (todaysRecords.length > 0) {
+        const dateStr = today.toLocaleDateString('en-IN');
+        await this.whatsappService.sendDailySummary(dateStr, todaysRecords);
+        console.log(`✅ Daily WhatsApp summary sent for ${dateStr}`);
+      } else {
+        console.log('ℹ️  No valid attendance records today, skipping daily summary');
+      }
+    } catch (error) {
+      console.error('❌ Error sending daily WhatsApp summary:', error);
+    }
   }
 
   // Manual trigger for testing

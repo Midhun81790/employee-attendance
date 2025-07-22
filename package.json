@@ -28,7 +28,8 @@
     "nodemailer": "^6.9.8",
     "csv-writer": "^1.6.0",
     "node-cron": "^3.0.3",
-    "archiver": "^6.0.1"
+    "archiver": "^6.0.1",
+    "axios": "^1.6.0"
   },
   "devDependencies": {
     "nodemon": "^3.0.1"

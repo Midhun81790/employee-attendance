@@ -73,11 +73,13 @@ mongoose.connect(process.env.MONGO_URI)
 const mainRoutes = require("./routes/main");
 const employeeRoutes = require("./routes/employee");
 const attendanceAPIRoutes = require("./routes/attendanceAPI");
+const adminSettingsRoutes = require("./routes/adminSettings");
 
 // The more specific employee routes must be registered before the general routes
 // to avoid being caught by the main router's wildcard handlers.
 app.use("/employee", employeeRoutes);
 app.use("/api/attendance", attendanceAPIRoutes);
+app.use("/admin", adminSettingsRoutes);
 app.use("/", mainRoutes);
 
 // Error handling middleware
