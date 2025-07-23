@@ -194,11 +194,7 @@
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
     
-    <!-- Google Maps API for Location Detection -->
-    <script async defer src="https://maps.googleapis.com/maps/api/js?key=AIzaSyDummy&libraries=geometry"></script>
-    
-    <!-- Google Maps Location Detection System -->
-    <script src="/js/google-maps-detector.js"></script>
+    <!-- Simple Location Detection System -->
     <script>
         const attendanceType = <%- JSON.stringify(attendanceType) %>;
         const companyLocation = <%- JSON.stringify(companyLocation) %>;
@@ -212,8 +208,6 @@
         let video, canvas, ctx;
         let knownDescriptors = [];
         let detectionInterval;
-
-        // --- Add a visible timeout to location detection ---
         let locationTimeout = null;
 
         // Update current time
@@ -248,435 +242,71 @@
             return R * c; // Distance in meters
         }
 
-        // Initialize Google Maps location detection
-        async function initializeRobustLocation() {
-            console.log('🚀 Starting Google Maps location detection...');
+        // Simple and efficient location detection
+        function getUserLocation() {
+            console.log('🚀 Starting simple location detection...');
             
-            // Show loading state
-            updateLocationCard("Detecting your location...", "Using Google Maps for accurate location detection. Please wait...", "loading");
+            if (!navigator.geolocation) {
+                showLocationError("Geolocation not supported", "Please use a modern browser that supports location services.");
+                return;
+            }
 
-            // Set a 20-second timeout to show error if location is not detected
-            if (locationTimeout) clearTimeout(locationTimeout);
+            // Show loading state
+            updateLocationCard("Getting your location...", "Please allow location access when prompted", "loading");
+
+            // Set timeout for location detection
             locationTimeout = setTimeout(() => {
                 showLocationError(
                     "Location detection timed out",
-                    "We could not detect your location within 20 seconds. Please check your browser's location permissions and try refresh."
+                    "Please check your browser's location permissions and try again."
                 );
-            }, 20000);
+            }, 15000);
 
-            try {
-                // Initialize Google Maps detector
-                const detector = new GoogleMapsLocationDetector({
-                    defaultLocation: {
-                        latitude: companyLocation.latitude,
-                        longitude: companyLocation.longitude,
-                        address: "Company Location"
-                    },
-                    gpsTimeout: 15000
-                });
-
-                // Show mobile-specific message
-                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-                if (isMobile) {
-                    updateLocationCard(
-                        "📱 Mobile GPS Detection", 
-                        "Using Google Maps for accurate mobile location. This may take up to 30 seconds. Please wait...", 
-                        "loading"
-                    );
-                }
-
-                // Detect location using Google Maps
-                const locationData = await detector.detectLocation();
-                
-                if (locationTimeout) clearTimeout(locationTimeout);
-                console.log('✅ Google Maps location detection successful:', locationData);
-                
-                // Create position object for existing code compatibility
-                const position = {
-                    coords: {
-                        latitude: locationData.latitude,
-                        longitude: locationData.longitude,
-                        accuracy: locationData.accuracy || 50
-                    },
-                    address: locationData.address,
-                    method: locationData.method,
-                    deviceType: locationData.deviceType
-                };
-                
-                handleLocationSuccess(position);
-                
-                // Show detection method details
-                const methodElement = document.createElement('small');
-                methodElement.className = 'text-success';
-                methodElement.innerHTML = `
-                    <br><i class="bi bi-check-circle"></i> Method: ${locationData.method}
-                    <br>Device: ${locationData.deviceType === 'mobile' ? '📱 Mobile' : '💻 Desktop'}
-                    <br>Address: ${locationData.address}
-                    <br>Accuracy: ±${Math.round(locationData.accuracy)}m
-                `;
-                
-                const coordDiv = document.getElementById('coordinates');
-                if (coordDiv) {
-                    coordDiv.appendChild(methodElement);
-                }
-                
-            } catch (error) {
-                if (locationTimeout) clearTimeout(locationTimeout);
-                console.error('❌ Google Maps location detection failed:', error);
-                showLocationError(
-                    "Unable to detect your location",
-                    `Location detection failed: ${error.message}. Please check your location settings and try again.`
-                );
-            }
-        }
-
-        // Fallback simple location detection
-        function useSimpleLocationDetection() {
-            console.log('🔄 Using simple location detection fallback...');
+            // Mobile-optimized GPS options
+            const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             
-            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
-            
-            if (isDevelopment) {
-                console.log('🔧 Development mode detected - using default location');
-                setTimeout(() => {
-                    const defaultPosition = {
-                        coords: {
-                            latitude: 16.4889184,
-                            longitude: 79.8856714,
-                            accuracy: 50
-                        }
-                    };
-                    handleLocationSuccess(defaultPosition);
-                    
-                    // Show development notice
-                    const devNotice = document.createElement('small');
-                    devNotice.className = 'text-warning';
-                    devNotice.innerHTML = '<br><i class="fas fa-code"></i> Development Mode - Using Default Location';
-                    const coordDiv = document.getElementById('coordinates');
-                    if (coordDiv) {
-                        coordDiv.appendChild(devNotice);
-                    }
-                }, 1000);
-                return;
-            }
-
-            // Production fallback - try basic GPS
-            const basicOptions = {
+            const gpsOptions = {
                 enableHighAccuracy: true,
-                timeout: 15000,
-                maximumAge: 300000 // 5 minutes
+                timeout: isMobile ? 20000 : 15000,
+                maximumAge: 60000 // Accept 1-minute cached location
             };
 
+            console.log(`📱 Device: ${isMobile ? 'Mobile' : 'Desktop'}`);
+
+            // Try high accuracy GPS first
             navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    console.log('✅ Basic GPS successful');
-                    handleLocationSuccess(position);
-                },
+                handleLocationSuccess,
                 (error) => {
-                    console.log('❌ Basic GPS failed, trying low accuracy');
+                    console.warn('High accuracy GPS failed, trying fallback...');
                     
-                    // Try with low accuracy
-                    const lowAccuracyOptions = {
+                    // Fallback with lower accuracy
+                    const fallbackOptions = {
                         enableHighAccuracy: false,
-                        timeout: 30000,
-                        maximumAge: 600000 // 10 minutes
+                        timeout: isMobile ? 25000 : 20000,
+                        maximumAge: 300000 // Accept 5-minute cached location
                     };
 
                     navigator.geolocation.getCurrentPosition(
-                        (position) => {
-                            console.log('✅ Low accuracy GPS successful');
-                            handleLocationSuccess(position);
-                        },
-                        (finalError) => {
-                            console.log('❌ All GPS methods failed');
-                            showLocationError(
-                                "GPS location failed",
-                                "Please ensure location services are enabled in your browser and device settings."
-                            );
-                        },
-                        lowAccuracyOptions
+                        handleLocationSuccess,
+                        handleLocationError,
+                        fallbackOptions
                     );
                 },
-                basicOptions
+                gpsOptions
             );
-        }
-
-        // Get user location (keeping for compatibility)
-        function getUserLocation() {
-            console.log('⚠️ getUserLocation called - redirecting to robust detection');
-            initializeRobustLocation();
-        }
-            console.log('Starting getUserLocation...');
-            
-            if (!navigator.geolocation) {
-                console.log('Geolocation not supported');
-                showLocationError("Geolocation is not supported by this browser", "Please use a modern browser that supports location services.");
-                return;
-            }
-
-            // Show initial getting location message with immediate manual option
-            updateLocationCard("Getting your location...", "Please allow location access when prompted. If stuck on this screen, make sure you're using HTTPS and location permissions are enabled.", "loading");
-
-            // Detect mobile device for optimized settings
-            function isMobileDevice() {
-                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-            }
-
-            // Alternative mobile detection methods
-            function isDefinitelyMobile() {
-                return (
-                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
-                    ('ontouchstart' in window) ||
-                    (navigator.maxTouchPoints > 0) ||
-                    (window.screen.width <= 768)
-                );
-            }
-
-            const mobile = isDefinitelyMobile();
-            console.log('Device type:', mobile ? '📱 Mobile' : '💻 Desktop');
-            console.log('User agent:', navigator.userAgent);
-            console.log('Touch support:', 'ontouchstart' in window);
-            console.log('Screen width:', window.screen.width);
-
-            // For mobile devices, try IP-based location first, then GPS
-            if (mobile) {
-                console.log('📱 Mobile detected - trying IP-based location first...');
-                tryIPLocation().then(ipLocation => {
-                    if (ipLocation) {
-                        console.log('✅ IP-based location successful:', ipLocation);
-                        handleLocationSuccess({
-                            coords: {
-                                latitude: ipLocation.lat,
-                                longitude: ipLocation.lng,
-                                accuracy: 1000 // IP location is less accurate
-                            }
-                        });
-                        return;
-                    }
-                    // If IP location fails, try GPS with mobile-optimized settings
-                    tryMobileGPS();
-                }).catch(() => {
-                    console.log('IP location failed, trying GPS...');
-                    tryMobileGPS();
-                });
-            } else {
-                // Desktop - use standard GPS
-                tryStandardGPS();
-            }
-
-            // IP-based location service
-            async function tryIPLocation() {
-                try {
-                    console.log('Attempting IP-based location...');
-                    const response = await fetch('http://ip-api.com/json/', {
-                        timeout: 5000
-                    });
-                    const data = await response.json();
-                    
-                    if (data.status === 'success') {
-                        return {
-                            lat: data.lat,
-                            lng: data.lon,
-                            city: data.city,
-                            country: data.country
-                        };
-                    }
-                    return null;
-                } catch (error) {
-                    console.log('IP location failed:', error);
-                    return null;
-                }
-            }
-
-            // Mobile-optimized GPS
-            function tryMobileGPS() {
-                console.log('📱 Trying mobile-optimized GPS...');
-                
-                const mobileOptions = {
-                    enableHighAccuracy: false, // Start with low accuracy for speed
-                    timeout: 10000, // Shorter initial timeout
-                    maximumAge: 300000 // Accept 5-minute old cached location
-                };
-
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        console.log('✅ Mobile GPS successful (low accuracy)');
-                        handleLocationSuccess(position);
-                    },
-                    (error) => {
-                        console.log('� Low accuracy GPS failed, trying high accuracy...');
-                        tryHighAccuracyMobileGPS();
-                    },
-                    mobileOptions
-                );
-            }
-
-            // High accuracy mobile GPS fallback
-            function tryHighAccuracyMobileGPS() {
-                const highAccuracyOptions = {
-                    enableHighAccuracy: true,
-                    timeout: 30000, // Longer timeout for high accuracy
-                    maximumAge: 60000 // 1-minute cached location
-                };
-
-                navigator.geolocation.getCurrentPosition(
-                    (position) => {
-                        console.log('✅ Mobile high accuracy GPS successful');
-                        handleLocationSuccess(position);
-                    },
-                    (error) => {
-                        console.log('📱 All GPS methods failed, showing manual entry');
-                        handleLocationError(error);
-                    },
-                    highAccuracyOptions
-                );
-            }
-
-            // Standard desktop GPS
-            function tryStandardGPS() {
-
-            // Standard desktop GPS
-            function tryStandardGPS() {
-                console.log('💻 Desktop GPS with standard settings');
-                
-                const options = {
-                    enableHighAccuracy: true,
-                    timeout: 15000,
-                    maximumAge: 60000
-                };
-
-                console.log('Optimized GPS options for desktop:', options);
-                console.log('Current URL protocol:', window.location.protocol);
-                console.log('Is HTTPS?', window.location.protocol === 'https:');
-
-                // Add immediate fallback for localhost/HTTP issues
-                const quickTimeout = setTimeout(() => {
-                    console.log('Quick timeout reached - adding manual location option');
-                    updateLocationCard(
-                        "Location detection is taking longer than expected", 
-                        "This might be due to browser permissions or connection issues. You can still proceed with manual location entry below.",
-                        "warning"
-                    );
-                    showManualLocationOption();
-                }, 8000);
-
-                navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    console.log('✅ Location permission granted, position received');
-                    clearTimeout(quickTimeout);
-                    handleLocationSuccess(position);
-                },
-                (error) => {
-                    console.log('❌ Location error occurred');
-                    clearTimeout(quickTimeout);
-                    handleLocationError(error);
-                },
-                options
-            );
-        }
-
-        // Show manual location option when automatic fails
-        function showManualLocationOption() {
-            const locationCard = document.getElementById('locationCard');
-            locationCard.innerHTML += `
-                <div class="mt-3 text-center">
-                    <button id="useManualLocation" class="btn btn-outline-primary btn-sm">
-                        <i class="bi bi-geo-alt"></i> Use Manual Location Entry
-                    </button>
-                    <p class="small text-muted mt-2">For testing purposes only</p>
-                </div>
-            `;
-            
-            document.getElementById('useManualLocation').onclick = function() {
-                // For testing purposes, use the exact office location
-                console.log('Using manual location fallback - exact office location');
-                const defaultLocation = {
-                    coords: {
-                        latitude: companyLocation.latitude, // Exact office location
-                        longitude: companyLocation.longitude,
-                        accuracy: 10 // Very accurate
-                    }
-                };
-                handleLocationSuccess(defaultLocation);
-            };
-        }
-
-        // Update location card with custom message
-        function updateLocationCard(title, message, type = "loading") {
-            const locationCard = document.getElementById('locationCard');
-            if (type === "loading") {
-                locationCard.className = 'location-card mb-4';
-                locationCard.innerHTML = `
-                    <div class="text-center">
-                        <div class="loading-spinner mb-3"></div>
-                        <h5>${title}</h5>
-                        <p class="text-muted mb-2">${message}</p>
-                    </div>
-                `;
-            } else if (type === "warning") {
-                locationCard.className = 'location-card mb-4';
-                locationCard.innerHTML = `
-                    <div class="text-center">
-                        <div class="alert alert-warning">
-                            <i class="bi bi-exclamation-triangle"></i>
-                            <h6>${title}</h6>
-                            <p class="mb-0">${message}</p>
-                        </div>
-                    </div>
-                `;
-            } else if (type === "error") {
-                locationCard.className = 'location-card mb-4 location-error';
-                locationCard.innerHTML = `
-                    <div class="text-center">
-                        <i class="bi bi-geo-alt-slash text-danger" style="font-size: 3rem;"></i>
-                        <h5 class="mt-2 text-danger">${title}</h5>
-                        <p class="mb-2"><strong>${message}</strong></p>
-                        <p class="text-muted mb-3">Please check your browser's location permissions and try again.</p>
-                    </div>
-                `;
-            }
-        }
-
-        // --- Enhance error handling for denied/blocked location ---
-        function showLocationError(title, message) {
-            updateLocationCard(title, message, "error");
-            // Show a button to try manual location entry for development/testing
-            const card = document.getElementById('locationCard');
-            if (card && !document.getElementById('manualLocationBtn')) {
-                const btn = document.createElement('button');
-                btn.id = 'manualLocationBtn';
-                btn.className = 'btn btn-warning mt-2';
-                btn.innerText = 'Use Default Location (Testing)';
-                btn.onclick = function() {
-                    // For development/testing - use company location
-                    const testPosition = {
-                        coords: {
-                            latitude: companyLocation.latitude,
-                            longitude: companyLocation.longitude,
-                            accuracy: 10
-                        },
-                        address: "Test Location (Default)",
-                        method: "Manual Entry",
-                        deviceType: "testing"
-                    };
-                    handleLocationSuccess(testPosition);
-                };
-                card.appendChild(btn);
-            }
         }
 
         // Handle successful location retrieval
         function handleLocationSuccess(position) {
-            console.log('Location success:', position);
+            if (locationTimeout) clearTimeout(locationTimeout);
+            
+            console.log('✅ Location detected successfully:', position);
             
             userLocation = {
                 latitude: position.coords.latitude,
                 longitude: position.coords.longitude
             };
             locationAccuracy = position.coords.accuracy;
-
-            console.log('User location:', userLocation);
-            console.log('Location accuracy:', locationAccuracy);
 
             // Calculate distance from office
             const distance = calculateDistance(
@@ -687,99 +317,118 @@
             );
 
             const isWithinGeofence = distance <= companyLocation.radius;
-            console.log('Distance from office:', distance, 'meters');
-            console.log('Within geofence:', isWithinGeofence);
+            console.log(`📍 Distance from office: ${distance}m`);
+            console.log(`✅ Within geofence: ${isWithinGeofence}`);
 
-            // Reverse geocoding to get address
-            getAddressFromCoordinates(userLocation.latitude, userLocation.longitude)
+            // Get address using simple reverse geocoding
+            getSimpleAddress(userLocation.latitude, userLocation.longitude)
                 .then(address => {
-                    console.log('Address resolved:', address);
                     showLocationStatus(distance, isWithinGeofence, address);
                 })
-                .catch(error => {
-                    console.log('Address resolution failed:', error);
-                    showLocationStatus(distance, isWithinGeofence, "Location detected");
+                .catch(() => {
+                    showLocationStatus(distance, isWithinGeofence, 
+                        `${userLocation.latitude.toFixed(4)}, ${userLocation.longitude.toFixed(4)}`);
                 });
         }
 
         // Handle location error
         function handleLocationError(error) {
-            console.log('Location error:', error);
-            console.log('Error code:', error.code);
-            console.log('Error message:', error.message);
+            if (locationTimeout) clearTimeout(locationTimeout);
             
-            const mobile = isMobileDevice();
+            console.error('❌ Location detection failed:', error);
+            
             let message = "Unable to get your location";
             let suggestion = "";
             
             switch(error.code) {
                 case error.PERMISSION_DENIED:
                     message = "Location access was denied";
-                    suggestion = mobile ? 
-                        "📱 Mobile: Please enable location in your browser settings, then allow location access when prompted. Make sure location services are enabled in your device settings." :
-                        "Please click the location icon in your browser's address bar and allow location access, then try again.";
+                    suggestion = "Please allow location access in your browser settings and try again.";
                     break;
                 case error.POSITION_UNAVAILABLE:
                     message = "Location information is unavailable";
-                    suggestion = mobile ?
-                        "📱 Mobile: GPS signal not available. Try moving outside or near a window. Make sure location services are enabled on your device." :
-                        "Please make sure your device's location services are enabled and you have a good GPS signal.";
+                    suggestion = "Please make sure location services are enabled on your device.";
                     break;
                 case error.TIMEOUT:
                     message = "Location request timed out";
-                    suggestion = mobile ?
-                        "📱 Mobile: GPS is taking too long. This is common indoors. Try going outside and waiting 30 seconds, or use manual entry." :
-                        "This might be due to poor GPS signal. Please try again or use manual entry.";
+                    suggestion = "Poor GPS signal. Try moving to an open area or near a window.";
                     break;
                 default:
-                    suggestion = mobile ?
-                        "📱 Mobile: Try refreshing the page, enabling high-accuracy GPS, or going outside for better signal." :
-                        "Please check your location settings and try again.";
-            }
-            
-            // For mobile, also try a fallback with lower accuracy
-            if (mobile && error.code === error.TIMEOUT) {
-                console.log('📱 Trying mobile fallback with lower accuracy...');
-                setTimeout(() => {
-                    tryMobileFallback();
-                }, 2000);
+                    suggestion = "Please check your location settings and try again.";
             }
             
             showLocationError(message, suggestion);
         }
 
-        // Mobile fallback with relaxed settings
-        function tryMobileFallback() {
-            console.log('📱 Attempting mobile GPS fallback...');
-            
-            const fallbackOptions = {
-                enableHighAccuracy: false, // Use lower accuracy for speed
-                timeout: 45000, // Very long timeout
-                maximumAge: 300000 // Accept 5-minute old cached location
-            };
+        // Simple reverse geocoding using free service
+        async function getSimpleAddress(lat, lon) {
+            try {
+                // Try multiple free services for reliability
+                const services = [
+                    `https://api.bigdatacloud.net/data/reverse-geocode-client?latitude=${lat}&longitude=${lon}&localityLanguage=en`,
+                    `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lon}&zoom=18&addressdetails=1`
+                ];
 
-            navigator.geolocation.getCurrentPosition(
-                (position) => {
-                    console.log('📱 Mobile fallback successful!');
-                    handleLocationSuccess(position);
-                },
-                (fallbackError) => {
-                    console.log('📱 Mobile fallback also failed:', fallbackError);
-                    // Show final manual option
-                    updateLocationCard(
-                        "GPS unavailable on mobile device", 
-                        "📱 Mobile GPS is not working. This is common indoors or in areas with poor signal. Please use manual location entry below.",
-                        "warning"
-                    );
-                    showManualLocationOption();
-                },
-                fallbackOptions
-            );
+                for (const serviceUrl of services) {
+                    try {
+                        const response = await fetch(serviceUrl);
+                        const data = await response.json();
+                        
+                        // Handle different response formats
+                        let address = data.display_name || data.locality || 
+                                     `${data.city || data.locality || 'Unknown'}, ${data.principalSubdivision || data.countryName || 'India'}`;
+                        
+                        if (address && address !== 'undefined, undefined') {
+                            return address;
+                        }
+                    } catch (err) {
+                        console.warn('Geocoding service failed:', err);
+                        continue;
+                    }
+                }
+                
+                // Fallback to coordinates
+                return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+                
+            } catch (error) {
+                console.warn('All geocoding failed:', error);
+                return `${lat.toFixed(4)}, ${lon.toFixed(4)}`;
+            }
         }
 
-        // Get address from coordinates using multiple geocoding services
-        async function getAddressFromCoordinates(lat, lon) {
-            return await getAddressFromGoogleMaps(lat, lon);
+        // Update location card with custom message
+        function updateLocationCard(title, message, type = "loading") {
+            const locationCard = document.getElementById('locationCard');
+            
+            if (type === "loading") {
+                locationCard.className = 'location-card mb-4';
+                locationCard.innerHTML = `
+                    <div class="text-center">
+                        <div class="loading-spinner mb-3"></div>
+                        <h5>${title}</h5>
+                        <p class="text-muted mb-2">${message}</p>
+                    </div>
+                `;
+            } else if (type === "error") {
+                locationCard.className = 'location-card mb-4 location-error';
+                locationCard.innerHTML = `
+                    <div class="text-center">
+                        <i class="bi bi-geo-alt-slash text-danger" style="font-size: 3rem;"></i>
+                        <h5 class="mt-2 text-danger">${title}</h5>
+                        <p class="mb-2"><strong>${message}</strong></p>
+                        <div class="mt-3">
+                            <button class="btn btn-outline-primary" onclick="getUserLocation()">
+                                <i class="bi bi-arrow-clockwise"></i> Try Again
+                            </button>
+                        </div>
+                    </div>
+                `;
+            }
+        }
+
+        // Show location error
+        function showLocationError(message, suggestion = "") {
+            updateLocationCard(message, suggestion, "error");
         }
 
         // Show location status
@@ -807,31 +456,18 @@
                 ${!isWithinGeofence ? `
                 <div class="alert alert-danger mt-3 mb-0">
                     <i class="bi bi-x-circle"></i>
-                    <strong>Access Denied:</strong> You must be at the office location (within ${companyLocation.radius}m) to mark attendance. 
-                    Please go to the office and try again.
+                    <strong>Access Denied:</strong> You must be at the office location (within ${companyLocation.radius}m) to mark attendance.
                 </div>
                 ` : ''}
             `;
             
-            // STRICT ENFORCEMENT: Only allow attendance if within geofence
             if (isWithinGeofence) {
-                // Show face scanning after location is verified
                 showFaceScanning();
             } else {
-                // Hide face scanning and disable attendance button
                 document.getElementById('faceScanCard').style.display = 'none';
                 markBtn.disabled = true;
                 markBtn.innerHTML = '<i class="bi bi-x-circle"></i> Not at Office Location';
                 markBtn.className = 'btn btn-danger disabled';
-                
-                // Show error message
-                document.getElementById('resultArea').innerHTML = `
-                    <div class="alert alert-danger">
-                        <h6><i class="bi bi-x-circle"></i> Attendance Blocked</h6>
-                        <p class="mb-0">You are ${Math.round(distance)}m away from the office. 
-                        You must be within ${companyLocation.radius}m to mark attendance.</p>
-                    </div>
-                `;
             }
         }
 
@@ -848,38 +484,28 @@
                 
                 // Try loading from local models first, fallback to CDN
                 const modelPaths = [
-                    '/models', // Local models
-                    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights' // CDN fallback
+                    '/models',
+                    'https://raw.githubusercontent.com/justadudewhohacks/face-api.js/master/weights'
                 ];
-                
-                let modelsLoadedSuccessfully = false;
                 
                 for (const modelPath of modelPaths) {
                     try {
-                        console.log(`Trying to load models from: ${modelPath}`);
-                        
                         await Promise.all([
                             faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
                             faceapi.nets.faceRecognitionNet.loadFromUri(modelPath),
                             faceapi.nets.faceLandmark68Net.loadFromUri(modelPath)
                         ]);
                         
-                        modelsLoadedSuccessfully = true;
-                        console.log(`🎉 Models loaded successfully from: ${modelPath}`);
+                        console.log(`✅ Models loaded from: ${modelPath}`);
                         break;
                         
                     } catch (err) {
-                        console.warn(`❌ Failed to load models from ${modelPath}:`, err);
-                        if (modelPath === modelPaths[modelPaths.length - 1]) {
-                            throw new Error('Failed to load models from all sources');
-                        }
+                        console.warn(`Failed to load models from ${modelPath}:`, err);
+                        continue;
                     }
                 }
 
-                console.log('Models loaded, getting known descriptors...');
                 await loadKnownDescriptors();
-                
-                console.log('Starting camera...');
                 await startCamera();
                 
             } catch (error) {
@@ -950,36 +576,31 @@
                         .withFaceLandmarks()
                         .withFaceDescriptor();
                     
-                    // Clear previous drawings
                     ctx.clearRect(0, 0, canvas.width, canvas.height);
                     
                     if (detections) {
-                        // Draw detection box
                         const box = detections.detection.box;
                         ctx.strokeStyle = '#00ff00';
                         ctx.lineWidth = 2;
                         ctx.strokeRect(box.x, box.y, box.width, box.height);
                         
-                        // Check for face match
                         const match = findBestMatch(detections.descriptor);
                         
-                        if (match.distance < 0.6) { // Threshold for recognition
-                            console.log(`Face recognized: ${match.name} (distance: ${match.distance})`);
+                        if (match.distance < 0.6) {
+                            console.log(`Face recognized: ${match.name}`);
                             faceVerified = true;
                             
-                            // Stop detection
                             clearInterval(detectionInterval);
                             video.srcObject.getTracks().forEach(track => track.stop());
                             
                             showFaceSuccess(match.name);
                             
-                            // Enable attendance button
                             const markBtn = document.getElementById('markAttendanceBtn');
                             markBtn.disabled = false;
                             markBtn.innerHTML = '<i class="bi bi-check-circle"></i> Mark Attendance';
                             
                         } else {
-                            updateFaceStatus('Face detected but not recognized. Please ensure good lighting and look directly at camera.', 'warning');
+                            updateFaceStatus('Face detected but not recognized. Please ensure good lighting.', 'warning');
                         }
                     } else {
                         updateFaceStatus('Looking for face... Please position yourself in front of the camera.', 'info');
@@ -1055,54 +676,24 @@
             `;
         }
 
-        // Show location error
-        function showLocationError(message, suggestion = "") {
-            const locationCard = document.getElementById('locationCard');
-            locationCard.className = 'location-card mb-4 location-error';
-            locationCard.innerHTML = `
-                <div class="text-center">
-                    <i class="bi bi-geo-alt-slash text-danger" style="font-size: 3rem;"></i>
-                    <h5 class="mt-2 text-danger">Location Error</h5>
-                    <p class="mb-2"><strong>${message}</strong></p>
-                    ${suggestion ? `<p class="text-muted mb-3">${suggestion}</p>` : ''}
-                    <div class="d-grid gap-2">
-                        <button class="btn btn-outline-primary" onclick="getUserLocation()">
-                            <i class="bi bi-arrow-clockwise"></i> Try Again
-                        </button>
-                        <!-- Manual location fallback removed -->
-                    </div>
-                </div>
-            `;
-        }
-
         // Mark attendance
         async function markAttendance() {
-            console.log('Starting markAttendance function...');
-            
             if (!userLocation) {
-                console.log('ERROR: No user location available');
                 alert('Please allow location access first');
                 return;
             }
 
             if (!faceVerified) {
-                console.log('ERROR: Face not verified');
                 alert('Please complete face verification first');
                 return;
             }
-
-            console.log('User location available:', userLocation);
-            console.log('Face verified:', faceVerified);
 
             const markBtn = document.getElementById('markAttendanceBtn');
             markBtn.disabled = true;
             markBtn.innerHTML = '<span class="spinner-border spinner-border-sm me-2"></span>Marking...';
 
             try {
-                // Get current address
-                console.log('Getting address for coordinates:', userLocation);
-                const address = await getAddressFromCoordinates(userLocation.latitude, userLocation.longitude);
-                console.log('Address resolved:', address);
+                const address = await getSimpleAddress(userLocation.latitude, userLocation.longitude);
                 
                 const requestData = {
                     attendanceType,
@@ -1111,8 +702,6 @@
                     address,
                     accuracy: locationAccuracy
                 };
-
-                console.log('Sending request with data:', requestData);
                 
                 const response = await fetch('/employee/mark-attendance', {
                     method: 'POST',
@@ -1122,26 +711,16 @@
                     body: JSON.stringify(requestData)
                 });
 
-                console.log('Response status:', response.status);
-                console.log('Response headers:', response.headers);
-
                 const result = await response.json();
-                console.log('Response data:', result);
 
                 if (response.ok) {
-                    console.log('SUCCESS: Attendance marked');
                     showSuccess(result);
-                } else if (response.status === 403) {
-                    console.log('FORBIDDEN: Location access denied');
-                    showLocationError(result.message || 'You are not at the office location', 
-                                    `Distance: ${result.distance || 'Unknown'}m. Required: within ${result.requiredRadius || 200}m`);
                 } else {
-                    console.log('ERROR: Failed to mark attendance');
-                    showError(result.message || 'Unknown error occurred');
+                    showError(result.message || 'Failed to mark attendance');
                 }
             } catch (error) {
-                console.error('CATCH: Error marking attendance:', error);
-                showError('Failed to mark attendance. Please try again. Error: ' + error.message);
+                console.error('Error marking attendance:', error);
+                showError('Failed to mark attendance. Please try again.');
             }
 
             markBtn.disabled = false;
@@ -1174,8 +753,6 @@
                     </div>
                 </div>
             `;
-
-            // Disable mark button since attendance is already marked
             document.getElementById('markAttendanceBtn').style.display = 'none';
         }
 
@@ -1197,15 +774,7 @@
         // Initialize
         updateTime();
         setInterval(updateTime, 1000);
-        
-        // Debug location API
-        console.log('Initializing robust location detection...');
-        console.log('Navigator geolocation available:', !!navigator.geolocation);
-        console.log('HTTPS protocol:', location.protocol === 'https:');
-        console.log('User agent:', navigator.userAgent);
-        
-        // Start robust location detection
-        initializeRobustLocation();
+        getUserLocation();
     </script>
 </body>
 </html>
