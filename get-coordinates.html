@@ -43,8 +43,8 @@
     </div>
 
     <script>
-        // LocationIQ API Token (use environment variable in production)
-        const LOCATIONIQ_TOKEN = 'pk.test.your_locationiq_token_here'; // Replace with actual token
+        // LocationIQ API Token (from your .env file)
+        const LOCATIONIQ_TOKEN = 'pk.49d6817128bb69c21c3a918030e028c2';
         
         // Detect if user is on mobile
         function isMobile() {
@@ -169,7 +169,7 @@
 
         // LocationIQ reverse geocoding
         async function reverseGeocode(latitude, longitude) {
-            // Skip API call if demo token
+            // Skip API call only if demo token
             if (LOCATIONIQ_TOKEN === 'pk.test.your_locationiq_token_here') {
                 console.log('🔧 Demo mode - skipping LocationIQ reverse geocoding');
                 return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (Demo Mode)`;
@@ -178,23 +178,41 @@
             const url = `https://eu1.locationiq.com/v1/reverse.php?key=${LOCATIONIQ_TOKEN}&lat=${latitude}&lon=${longitude}&format=json`;
             
             try {
+                console.log('🔍 Calling LocationIQ API for address lookup...');
                 const response = await fetch(url);
                 if (!response.ok) {
                     throw new Error(`LocationIQ API error: ${response.status}`);
                 }
                 
                 const data = await response.json();
+                console.log('✅ LocationIQ reverse geocoding successful:', data.display_name);
                 return data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
             } catch (error) {
-                console.warn('LocationIQ reverse geocoding failed:', error.message);
-                return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (Address lookup failed)`;
+                console.warn('❌ LocationIQ reverse geocoding failed:', error.message);
+                return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (Address lookup failed: ${error.message})`;
             }
         }
 
-        // Show location result
+        // Show location result with enhanced mobile information
         function showLocationResult(locationData) {
             const mobile = isMobile();
             const deviceType = mobile ? "📱 Mobile" : "💻 Desktop";
+            
+            let accuracyInfo = `~${locationData.accuracy} meters`;
+            if (locationData.accuracyStatus) {
+                accuracyInfo = `${locationData.accuracy} meters ${locationData.accuracyStatus}`;
+            }
+            
+            let recommendationSection = '';
+            if (locationData.recommendation) {
+                recommendationSection = `
+                    <p><strong>Recommendation:</strong></p>
+                    <p style="color: #666; font-style: italic;">${locationData.recommendation}</p>
+                    ${mobile && locationData.accuracy > 1000 ? 
+                        '<p style="color: #ff9800;"><strong>📱 Mobile Tips:</strong> Enable high accuracy GPS, go outside, wait for better signal</p>' : 
+                        ''}
+                `;
+            }
             
             document.getElementById("coordinates").innerHTML = `
                 <p><strong>Device:</strong> ${deviceType}</p>
@@ -202,8 +220,9 @@
                 <p><strong>Address:</strong> ${locationData.address}</p>
                 <p><strong>Latitude:</strong> ${locationData.latitude}</p>
                 <p><strong>Longitude:</strong> ${locationData.longitude}</p>
-                <p><strong>Accuracy:</strong> ~${locationData.accuracy} meters</p>
+                <p><strong>Accuracy:</strong> ${accuracyInfo}</p>
                 <p><strong>Timestamp:</strong> ${new Date(locationData.timestamp).toLocaleString()}</p>
+                ${recommendationSection}
                 <hr>
                 <p><strong>For location.json:</strong></p>
                 <code style="background: #e0e0e0; padding: 10px; border-radius: 5px; display: block;">
@@ -215,8 +234,8 @@
 }
                 </code>
                 <hr>
-                <p><strong>✅ LocationIQ + Leaflet.js Detection Successful!</strong></p>
-                <small>🎯 This location was detected using ${locationData.method}</small>
+                <p><strong>✅ LocationIQ + Enhanced GPS Detection Successful!</strong></p>
+                <small>🎯 This location was detected using ${locationData.method} with mobile-optimized settings</small>
             `;
             
             hideStatus();

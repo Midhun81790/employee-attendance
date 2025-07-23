@@ -269,6 +269,16 @@
                     fallbackEnabled: true
                 });
 
+                // Show mobile-specific loading message
+                const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+                if (isMobile) {
+                    updateLocationCard(
+                        "📱 Mobile GPS Detection", 
+                        "Trying high-accuracy GPS first, then fallback options. This may take up to 30 seconds for mobile devices. Please wait...", 
+                        "loading"
+                    );
+                }
+
                 // Detect location using LocationIQ + Leaflet.js
                 const locationData = await detector.detectLocation();
                 
@@ -285,10 +295,28 @@
                 
                 handleLocationSuccess(position);
                 
-                // Show detection method
+                // Show detection method with enhanced details
                 const methodElement = document.createElement('small');
                 methodElement.className = 'text-success';
-                methodElement.innerHTML = `<br><i class="bi bi-check-circle"></i> Method: ${locationData.method} | Address: ${locationData.address}`;
+                
+                let methodInfo = `<br><i class="bi bi-check-circle"></i> Method: ${locationData.method}`;
+                
+                if (locationData.deviceType) {
+                    methodInfo += ` | Device: ${locationData.deviceType === 'mobile' ? '📱 Mobile' : '💻 Desktop'}`;
+                }
+                
+                if (locationData.accuracyStatus) {
+                    methodInfo += `<br>Accuracy: ${locationData.accuracyStatus}`;
+                }
+                
+                if (locationData.recommendation) {
+                    methodInfo += `<br><em>${locationData.recommendation}</em>`;
+                }
+                
+                methodInfo += `<br>Address: ${locationData.address}`;
+                
+                methodElement.innerHTML = methodInfo;
+                
                 const coordDiv = document.getElementById('coordinates');
                 if (coordDiv) {
                     coordDiv.appendChild(methodElement);
