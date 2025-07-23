@@ -205,23 +205,27 @@
         </div>
     </div>
 
-    <!-- Include face-api.js -->
-    <script src="/models/face-api.min.js"></script>
+    <!-- Include face-api.js from CDN for better reliability -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <!-- Fallback simple face scanner for production -->
+    <script src="/js/simple-face-scanner.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     
     <script>
         let video, canvas, isScanning = false;
         let selectedAttendanceType = 'MORNING_ENTRY';
+        let faceAPILoaded = false;
+        let simpleFaceScanner = null;
 
         // Initialize page
         document.addEventListener('DOMContentLoaded', function() {
             video = document.getElementById('video');
             setupAttendanceTypeButtons();
             
-            // Wait a bit for face-api to load, then load models
+            // Try face-api first, fallback to simple scanner
             setTimeout(() => {
                 loadFaceAPIModels();
-            }, 1000);
+            }, 2000);
         });
 
         // Setup attendance type selection
@@ -249,60 +253,72 @@
         // Load face-api models
         async function loadFaceAPIModels() {
             try {
-                console.log('Loading face-api models...');
+                console.log('Loading face-api models for production...');
                 
                 // Check if face-api is loaded
                 if (typeof faceapi === 'undefined') {
                     throw new Error('face-api.js not loaded');
                 }
                 
-                // Load models with correct paths
-                const modelPath = '/models';
-                await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
-                await faceapi.nets.faceLandmark68Net.loadFromUri(modelPath);
-                await faceapi.nets.faceRecognitionNet.loadFromUri(modelPath);
+                showResult('Loading face recognition models...', 'info');
                 
-                console.log('✅ Face-api models loaded successfully');
-                showResult('Face recognition models loaded successfully', 'success');
+                // Try loading from CDN first (for production)
+                const modelPaths = [
+                    'https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/weights',
+                    '/models',
+                    './models',
+                    '/public/models'
+                ];
                 
-            } catch (error) {
-                console.error('❌ Error loading face-api models:', error);
-                showResult(`Error loading face recognition models: ${error.message}`, 'error');
+                let modelsLoaded = false;
                 
-                // Try alternative model loading
-                setTimeout(() => {
-                    loadAlternativeModels();
-                }, 2000);
-            }
-        }
-        
-        // Alternative model loading with different paths
-        async function loadAlternativeModels() {
-            try {
-                console.log('Trying alternative model paths...');
-                
-                // Try loading from different paths
-                const paths = ['/models/', './models/', '/public/models/'];
-                
-                for (const path of paths) {
+                for (const modelPath of modelPaths) {
                     try {
-                        await faceapi.nets.tinyFaceDetector.loadFromUri(path);
-                        await faceapi.nets.faceLandmark68Net.loadFromUri(path);
-                        await faceapi.nets.faceRecognitionNet.loadFromUri(path);
+                        console.log(`Trying to load models from: ${modelPath}`);
                         
-                        console.log(`✅ Models loaded from: ${path}`);
+                        await Promise.all([
+                            faceapi.nets.tinyFaceDetector.loadFromUri(modelPath),
+                            faceapi.nets.faceLandmark68Net.loadFromUri(modelPath),
+                            faceapi.nets.faceRecognitionNet.loadFromUri(modelPath)
+                        ]);
+                        
+                        console.log(`✅ Models loaded successfully from: ${modelPath}`);
                         showResult('Face recognition models loaded successfully', 'success');
-                        return;
+                        faceAPILoaded = true;
+                        modelsLoaded = true;
+                        break;
+                        
                     } catch (e) {
-                        console.log(`Failed to load from ${path}`);
+                        console.log(`Failed to load from ${modelPath}:`, e.message);
                     }
                 }
                 
-                throw new Error('All model paths failed');
+                if (!modelsLoaded) {
+                    throw new Error('All model paths failed');
+                }
                 
             } catch (error) {
-                console.error('❌ Alternative model loading failed:', error);
-                showResult('Unable to load face recognition models. Please check model files.', 'error');
+                console.error('❌ Error loading face-api models:', error);
+                showResult('Face-api models failed. Switching to simple face scanner...', 'warning');
+                
+                // Initialize simple face scanner as fallback
+                initializeSimpleFaceScanner();
+            }
+        }
+
+        // Initialize simple face scanner fallback
+        function initializeSimpleFaceScanner() {
+            try {
+                if (typeof SimpleFaceScanner !== 'undefined') {
+                    simpleFaceScanner = new SimpleFaceScanner();
+                    showResult('Simple face scanner initialized (production fallback)', 'success');
+                    console.log('✅ Simple face scanner ready for production deployment');
+                } else {
+                    showResult('All face recognition systems failed to load', 'error');
+                }
+            } catch (error) {
+                console.error('Simple face scanner initialization failed:', error);
+                showResult('Face recognition system unavailable', 'error');
             }
         }
 

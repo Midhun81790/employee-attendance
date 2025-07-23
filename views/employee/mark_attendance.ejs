@@ -257,34 +257,145 @@
                 return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
             }
 
-            const mobile = isMobileDevice();
-            console.log('Device type:', mobile ? '📱 Mobile' : '💻 Desktop');
-
-            // Mobile-optimized GPS settings
-            const options = {
-                enableHighAccuracy: true,
-                timeout: mobile ? 30000 : 15000, // Longer timeout for mobile
-                maximumAge: mobile ? 120000 : 60000 // Allow 2-minute cached location for mobile
-            };
-
-            console.log('Optimized GPS options for', mobile ? 'mobile' : 'desktop', ':', options);
-            console.log('Current URL protocol:', window.location.protocol);
-            console.log('Is HTTPS?', window.location.protocol === 'https:');
-
-            // Add immediate fallback for localhost/HTTP issues (longer for mobile)
-            const quickTimeout = setTimeout(() => {
-                console.log('Quick timeout reached - adding manual location option');
-                updateLocationCard(
-                    "Location detection is taking longer than expected", 
-                    mobile ? 
-                        "📱 Mobile GPS can take longer. Try moving outside or near a window for better signal. You can still proceed with manual location entry below." :
-                        "This might be due to browser permissions or connection issues. You can still proceed with manual location entry below.",
-                    "warning"
+            // Alternative mobile detection methods
+            function isDefinitelyMobile() {
+                return (
+                    /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent) ||
+                    ('ontouchstart' in window) ||
+                    (navigator.maxTouchPoints > 0) ||
+                    (window.screen.width <= 768)
                 );
-                showManualLocationOption();
-            }, mobile ? 15000 : 8000); // Longer timeout for mobile devices
+            }
 
-            navigator.geolocation.getCurrentPosition(
+            const mobile = isDefinitelyMobile();
+            console.log('Device type:', mobile ? '📱 Mobile' : '💻 Desktop');
+            console.log('User agent:', navigator.userAgent);
+            console.log('Touch support:', 'ontouchstart' in window);
+            console.log('Screen width:', window.screen.width);
+
+            // For mobile devices, try IP-based location first, then GPS
+            if (mobile) {
+                console.log('📱 Mobile detected - trying IP-based location first...');
+                tryIPLocation().then(ipLocation => {
+                    if (ipLocation) {
+                        console.log('✅ IP-based location successful:', ipLocation);
+                        handleLocationSuccess({
+                            coords: {
+                                latitude: ipLocation.lat,
+                                longitude: ipLocation.lng,
+                                accuracy: 1000 // IP location is less accurate
+                            }
+                        });
+                        return;
+                    }
+                    // If IP location fails, try GPS with mobile-optimized settings
+                    tryMobileGPS();
+                }).catch(() => {
+                    console.log('IP location failed, trying GPS...');
+                    tryMobileGPS();
+                });
+            } else {
+                // Desktop - use standard GPS
+                tryStandardGPS();
+            }
+
+            // IP-based location service
+            async function tryIPLocation() {
+                try {
+                    console.log('Attempting IP-based location...');
+                    const response = await fetch('http://ip-api.com/json/', {
+                        timeout: 5000
+                    });
+                    const data = await response.json();
+                    
+                    if (data.status === 'success') {
+                        return {
+                            lat: data.lat,
+                            lng: data.lon,
+                            city: data.city,
+                            country: data.country
+                        };
+                    }
+                    return null;
+                } catch (error) {
+                    console.log('IP location failed:', error);
+                    return null;
+                }
+            }
+
+            // Mobile-optimized GPS
+            function tryMobileGPS() {
+                console.log('📱 Trying mobile-optimized GPS...');
+                
+                const mobileOptions = {
+                    enableHighAccuracy: false, // Start with low accuracy for speed
+                    timeout: 10000, // Shorter initial timeout
+                    maximumAge: 300000 // Accept 5-minute old cached location
+                };
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        console.log('✅ Mobile GPS successful (low accuracy)');
+                        handleLocationSuccess(position);
+                    },
+                    (error) => {
+                        console.log('� Low accuracy GPS failed, trying high accuracy...');
+                        tryHighAccuracyMobileGPS();
+                    },
+                    mobileOptions
+                );
+            }
+
+            // High accuracy mobile GPS fallback
+            function tryHighAccuracyMobileGPS() {
+                const highAccuracyOptions = {
+                    enableHighAccuracy: true,
+                    timeout: 30000, // Longer timeout for high accuracy
+                    maximumAge: 60000 // 1-minute cached location
+                };
+
+                navigator.geolocation.getCurrentPosition(
+                    (position) => {
+                        console.log('✅ Mobile high accuracy GPS successful');
+                        handleLocationSuccess(position);
+                    },
+                    (error) => {
+                        console.log('📱 All GPS methods failed, showing manual entry');
+                        handleLocationError(error);
+                    },
+                    highAccuracyOptions
+                );
+            }
+
+            // Standard desktop GPS
+            function tryStandardGPS() {
+
+            // Standard desktop GPS
+            function tryStandardGPS() {
+                console.log('💻 Desktop GPS with standard settings');
+                
+                const options = {
+                    enableHighAccuracy: true,
+                    timeout: 15000,
+                    maximumAge: 60000
+                };
+
+                console.log('Optimized GPS options for desktop:', options);
+                console.log('Current URL protocol:', window.location.protocol);
+                console.log('Is HTTPS?', window.location.protocol === 'https:');
+
+                // Add immediate fallback for localhost/HTTP issues
+                const quickTimeout = setTimeout(() => {
+                    console.log('Quick timeout reached - adding manual location option');
+                    updateLocationCard(
+                        "Location detection is taking longer than expected", 
+                        "This might be due to browser permissions or connection issues. You can still proceed with manual location entry below.",
+                        "warning"
+                    );
+                    showManualLocationOption();
+                }, 8000);
+
+                navigator.geolocation.getCurrentPosition(
                 (position) => {
                     console.log('✅ Location permission granted, position received');
                     clearTimeout(quickTimeout);
