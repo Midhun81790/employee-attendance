@@ -193,7 +193,13 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
-    <script src="/js/location-detector.js"></script>
+    
+    <!-- Leaflet.js for Map Integration -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- LocationIQ + Leaflet.js Location Detection -->
+    <script src="/js/locationiq-detector.js"></script></script>
     <script>
         const attendanceType = <%- JSON.stringify(attendanceType) %>;
         const companyLocation = <%- JSON.stringify(companyLocation) %>;
@@ -240,63 +246,61 @@
             return R * c; // Distance in meters
         }
 
-        // Initialize robust location detection
-        function initializeRobustLocation() {
-            console.log('🚀 Starting robust location detection...');
+        // Initialize LocationIQ location detection
+        async function initializeRobustLocation() {
+            console.log('🚀 Starting LocationIQ location detection...');
             
-            if (!navigator.geolocation) {
-                console.log('❌ Geolocation not supported');
-                showLocationError("Geolocation is not supported by this browser", "Please use a modern browser that supports location services.");
-                return;
-            }
-
             // Show loading state
-            updateLocationCard("Detecting your location...", "Using the most reliable method available. Please wait...", "loading");
+            updateLocationCard("Detecting your location...", "Using LocationIQ + Leaflet.js for reliable detection. Please wait...", "loading");
 
-            // Check if LocationDetector is available
-            if (typeof LocationDetector === 'undefined') {
-                console.log('⚠️ LocationDetector not loaded, using fallback');
-                useSimpleLocationDetection();
-                return;
-            }
+            try {
+                // Get LocationIQ API token from server
+                const locationIQToken = '<%- locationIQToken %>';
+                
+                // Initialize LocationIQ detector
+                const detector = new LocationIQDetector({
+                    locationIQToken: locationIQToken,
+                    defaultLocation: {
+                        latitude: companyLocation.latitude,
+                        longitude: companyLocation.longitude,
+                        address: "Company Location"
+                    },
+                    gpsTimeout: 15000,
+                    fallbackEnabled: true
+                });
 
-            // Use robust location detector
-            const detector = new LocationDetector();
-            
-            detector.detectLocation(
-                // Success callback
-                (locationData) => {
-                    console.log('✅ Location detected successfully:', locationData);
-                    
-                    // Simulate position object for existing code compatibility
-                    const position = {
-                        coords: {
-                            latitude: locationData.latitude,
-                            longitude: locationData.longitude,
-                            accuracy: locationData.accuracy || 100
-                        }
-                    };
-                    
-                    handleLocationSuccess(position);
-                    
-                    // Show detection method
-                    const methodElement = document.createElement('small');
-                    methodElement.className = 'text-success';
-                    methodElement.innerHTML = `<br><i class="fas fa-check-circle"></i> ${locationData.method}`;
-                    const coordDiv = document.getElementById('coordinates');
-                    if (coordDiv) {
-                        coordDiv.appendChild(methodElement);
+                // Detect location using LocationIQ + Leaflet.js
+                const locationData = await detector.detectLocation();
+                
+                console.log('✅ LocationIQ detection successful:', locationData);
+                
+                // Simulate position object for existing code compatibility
+                const position = {
+                    coords: {
+                        latitude: locationData.latitude,
+                        longitude: locationData.longitude,
+                        accuracy: locationData.accuracy || 100
                     }
-                },
-                // Error callback
-                (error) => {
-                    console.log('❌ All location detection methods failed:', error);
-                    showLocationError(
-                        "Unable to detect your location",
-                        "All automatic location methods failed. This might be due to browser permissions or network issues. Please try refreshing the page or check your location settings."
-                    );
+                };
+                
+                handleLocationSuccess(position);
+                
+                // Show detection method
+                const methodElement = document.createElement('small');
+                methodElement.className = 'text-success';
+                methodElement.innerHTML = `<br><i class="bi bi-check-circle"></i> Method: ${locationData.method} | Address: ${locationData.address}`;
+                const coordDiv = document.getElementById('coordinates');
+                if (coordDiv) {
+                    coordDiv.appendChild(methodElement);
                 }
-            );
+                
+            } catch (error) {
+                console.error('❌ LocationIQ detection failed:', error);
+                showLocationError(
+                    "Unable to detect your location",
+                    `LocationIQ detection failed: ${error.message}. Please try refreshing the page or check your location settings.`
+                );
+            }
         }
 
         // Fallback simple location detection

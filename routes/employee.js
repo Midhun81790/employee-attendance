@@ -130,7 +130,8 @@ router.get("/mark-attendance", (req, res) => {
   res.render("employee/mark_attendance", {
     employee: req.session.employeeData,
     attendanceType: type,
-    companyLocation: getCompanyLocation()
+    companyLocation: getCompanyLocation(),
+    locationIQToken: process.env.LOCATIONIQ_TOKEN || 'pk.test.your_locationiq_token_here'
   });
 });
 

@@ -1,101 +1,271 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Get Current Location Coordinates</title>
+    <title>Get Current Location Coordinates - LocationIQ + Leaflet.js</title>
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <style>
         body { font-family: Arial, sans-serif; padding: 20px; text-align: center; }
         .coordinates { font-size: 18px; font-weight: bold; color: #2196F3; }
-        button { padding: 15px 30px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; }
+        button { padding: 15px 30px; font-size: 16px; background: #4CAF50; color: white; border: none; border-radius: 5px; cursor: pointer; margin: 5px; }
         .info { margin: 20px 0; padding: 15px; background: #f0f0f0; border-radius: 5px; }
+        .loading { color: #ff9800; }
+        .error { color: red; }
+        .success { color: green; }
     </style>
-    <script src="/js/location-detector.js"></script>
+    
+    <!-- Leaflet.js for Map Integration -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.css" />
+    <script src="https://cdn.jsdelivr.net/npm/leaflet@1.9.4/dist/leaflet.js"></script>
+    
+    <!-- LocationIQ + Leaflet.js Location Detection -->
+    <script src="/js/locationiq-detector.js"></script>
 </head>
 <body>
-    <h1>📍 Get Your Current Location</h1>
-    <button onclick="getLocation()">Get My Coordinates</button>
+    <h1>📍 Get Your Current Location - LocationIQ + Leaflet.js</h1>
+    <p>This tool uses <strong>LocationIQ API + Leaflet.js</strong> for reliable location detection</p>
+    
+    <button onclick="getLocationWithLocationIQ()">🗺️ Get My Coordinates (LocationIQ)</button>
+    <button onclick="showMapPicker()">🎯 Pick Location on Map</button>
+    
+    <div id="status" class="info" style="display:none;">
+        <div id="statusText"></div>
+    </div>
+    
     <div id="result" class="info" style="display:none;">
         <h3>Your Current Coordinates:</h3>
         <div id="coordinates" class="coordinates"></div>
         <p><strong>Copy these coordinates and update your location.json file</strong></p>
     </div>
-    <div id="error" style="display:none; color: red;"></div>
+    
+    <div id="mapContainer" style="display:none; margin: 20px 0;">
+        <h3>📍 Click on the map to select your location:</h3>
+        <div id="map" style="height: 400px; width: 100%; border-radius: 8px;"></div>
+    </div>
 
     <script>
+        // LocationIQ API Token (use environment variable in production)
+        const LOCATIONIQ_TOKEN = 'pk.test.your_locationiq_token_here'; // Replace with actual token
+        
         // Detect if user is on mobile
         function isMobile() {
             return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
         }
 
-        function getLocation() {
-            const mobile = isMobile();
-            document.getElementById("error").style.display = "none";
-            document.getElementById("result").style.display = "none";
+        // Main location detection using LocationIQ + Leaflet.js
+        async function getLocationWithLocationIQ() {
+            console.log('🚀 Starting LocationIQ + Leaflet.js detection...');
             
-            if (navigator.geolocation) {
-                // For production deployment, try IP location first for mobile
-                if (mobile) {
-                    console.log('📱 Mobile detected - trying IP location first...');
-                    tryIPLocation().then(ipLocation => {
-                        if (ipLocation) {
-                            showIPPosition(ipLocation);
-                        } else {
-                            tryGPSLocation();
-                        }
-                    }).catch(() => tryGPSLocation());
-                } else {
-                    tryGPSLocation();
-                }
-            } else {
-                document.getElementById("error").innerHTML = "Geolocation is not supported by this browser.";
-                document.getElementById("error").style.display = "block";
-            }
-        }
+            // Show loading status
+            showStatus('🔍 Detecting your location using LocationIQ + Leaflet.js...', 'loading');
+            hideResult();
+            hideMapContainer();
 
-        // IP-based location service for production
-        async function tryIPLocation() {
             try {
-                console.log('Attempting IP-based location...');
-                const response = await fetch('https://ipapi.co/json/');
-                const data = await response.json();
+                // Initialize LocationIQ detector
+                const detector = new LocationIQDetector({
+                    locationIQToken: LOCATIONIQ_TOKEN,
+                    defaultLocation: {
+                        latitude: 17.4065,
+                        longitude: 78.4772,
+                        address: "Default Location, Hyderabad"
+                    },
+                    gpsTimeout: 15000,
+                    fallbackEnabled: true
+                });
+
+                // Detect location
+                const locationData = await detector.detectLocation();
                 
-                if (data.latitude && data.longitude) {
-                    return {
-                        lat: data.latitude,
-                        lng: data.longitude,
-                        accuracy: 10000,
-                        source: 'IP Location'
-                    };
-                }
-                return null;
+                console.log('✅ LocationIQ detection successful:', locationData);
+                showLocationResult(locationData);
+                
             } catch (error) {
-                console.log('IP location failed:', error);
-                return null;
+                console.error('❌ LocationIQ detection failed:', error);
+                showStatus(`❌ Location detection failed: ${error.message}`, 'error');
+                
+                // Offer manual map picker as fallback
+                setTimeout(() => {
+                    showStatus('💡 Try using the map picker instead!', 'info');
+                }, 2000);
             }
         }
 
-        function showIPPosition(ipData) {
+        // Show manual map picker
+        function showMapPicker() {
+            console.log('🗺️ Opening manual map picker...');
+            showStatus('🗺️ Click anywhere on the map to select your location', 'info');
+            hideResult();
+            showMapContainer();
+            
+            // Initialize Leaflet map
+            initializeMap();
+        }
+
+        // Initialize Leaflet map for manual picking
+        function initializeMap() {
+            const mapContainer = document.getElementById('map');
+            
+            // Clear any existing map
+            mapContainer.innerHTML = '';
+            
+            // Default center (you can change this)
+            const defaultCenter = [17.4065, 78.4772];
+            
+            const map = L.map('map').setView(defaultCenter, 13);
+
+            // Add OpenStreetMap tiles
+            L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+                attribution: '© OpenStreetMap contributors'
+            }).addTo(map);
+
+            // Add initial marker
+            let currentMarker = L.marker(defaultCenter).addTo(map);
+            currentMarker.bindPopup('Click anywhere on the map to select location').openPopup();
+
+            // Handle map clicks
+            map.on('click', async function(e) {
+                const { lat, lng } = e.latlng;
+                console.log('📍 Manual location selected:', { lat, lng });
+
+                // Update marker position
+                currentMarker.setLatLng([lat, lng]);
+                
+                // Show loading for address lookup
+                showStatus('🔍 Getting address for selected location...', 'loading');
+                
+                try {
+                    // Try to get address using LocationIQ reverse geocoding
+                    const address = await reverseGeocode(lat, lng);
+                    
+                    const locationData = {
+                        latitude: lat,
+                        longitude: lng,
+                        address: address,
+                        accuracy: 50,
+                        method: 'manual-map-picker',
+                        timestamp: Date.now()
+                    };
+                    
+                    currentMarker.bindPopup(`Selected: ${address}`).openPopup();
+                    showLocationResult(locationData);
+                    
+                } catch (error) {
+                    console.warn('Address lookup failed, using coordinates only');
+                    
+                    const locationData = {
+                        latitude: lat,
+                        longitude: lng,
+                        address: `${lat.toFixed(4)}, ${lng.toFixed(4)}`,
+                        accuracy: 50,
+                        method: 'manual-coordinates',
+                        timestamp: Date.now()
+                    };
+                    
+                    currentMarker.bindPopup(`Selected: ${lat.toFixed(4)}, ${lng.toFixed(4)}`).openPopup();
+                    showLocationResult(locationData);
+                }
+            });
+        }
+
+        // LocationIQ reverse geocoding
+        async function reverseGeocode(latitude, longitude) {
+            // Skip API call if demo token
+            if (LOCATIONIQ_TOKEN === 'pk.test.your_locationiq_token_here') {
+                console.log('🔧 Demo mode - skipping LocationIQ reverse geocoding');
+                return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (Demo Mode)`;
+            }
+
+            const url = `https://eu1.locationiq.com/v1/reverse.php?key=${LOCATIONIQ_TOKEN}&lat=${latitude}&lon=${longitude}&format=json`;
+            
+            try {
+                const response = await fetch(url);
+                if (!response.ok) {
+                    throw new Error(`LocationIQ API error: ${response.status}`);
+                }
+                
+                const data = await response.json();
+                return data.display_name || `${latitude.toFixed(4)}, ${longitude.toFixed(4)}`;
+            } catch (error) {
+                console.warn('LocationIQ reverse geocoding failed:', error.message);
+                return `${latitude.toFixed(4)}, ${longitude.toFixed(4)} (Address lookup failed)`;
+            }
+        }
+
+        // Show location result
+        function showLocationResult(locationData) {
             const mobile = isMobile();
+            const deviceType = mobile ? "📱 Mobile" : "💻 Desktop";
             
             document.getElementById("coordinates").innerHTML = `
-                <p><strong>Device:</strong> ${mobile ? "📱 Mobile" : "💻 Desktop"}</p>
-                <p><strong>Location Source:</strong> ${ipData.source}</p>
-                <p><strong>Latitude:</strong> ${ipData.lat}</p>
-                <p><strong>Longitude:</strong> ${ipData.lng}</p>
-                <p><strong>Accuracy:</strong> ~${ipData.accuracy} meters (IP-based)</p>
+                <p><strong>Device:</strong> ${deviceType}</p>
+                <p><strong>Detection Method:</strong> ${locationData.method}</p>
+                <p><strong>Address:</strong> ${locationData.address}</p>
+                <p><strong>Latitude:</strong> ${locationData.latitude}</p>
+                <p><strong>Longitude:</strong> ${locationData.longitude}</p>
+                <p><strong>Accuracy:</strong> ~${locationData.accuracy} meters</p>
+                <p><strong>Timestamp:</strong> ${new Date(locationData.timestamp).toLocaleString()}</p>
                 <hr>
                 <p><strong>For location.json:</strong></p>
-                <code>"latitude": ${ipData.lat},<br>"longitude": ${ipData.lng}</code>
+                <code style="background: #e0e0e0; padding: 10px; border-radius: 5px; display: block;">
+{<br>
+&nbsp;&nbsp;"latitude": ${locationData.latitude},<br>
+&nbsp;&nbsp;"longitude": ${locationData.longitude},<br>
+&nbsp;&nbsp;"address": "${locationData.address}",<br>
+&nbsp;&nbsp;"radius": 200<br>
+}
+                </code>
                 <hr>
-                <p><strong>Note:</strong></p>
-                <small>⚠️ IP-based location is less accurate. For better accuracy, <button onclick="tryGPSLocation()" class="btn btn-sm btn-primary">Try GPS Location</button></small>
+                <p><strong>✅ LocationIQ + Leaflet.js Detection Successful!</strong></p>
+                <small>🎯 This location was detected using ${locationData.method}</small>
             `;
-            document.getElementById("result").style.display = "block";
+            
+            hideStatus();
+            showResult();
         }
 
-        function tryGPSLocation() {
-        function tryGPSLocation() {
-            const mobile = isMobile();
+        // Utility functions
+        function showStatus(message, type = 'info') {
+            const statusElement = document.getElementById('statusText');
+            statusElement.innerHTML = message;
+            statusElement.className = type;
+            document.getElementById('status').style.display = 'block';
+        }
+
+        function hideStatus() {
+            document.getElementById('status').style.display = 'none';
+        }
+
+        function showResult() {
+            document.getElementById('result').style.display = 'block';
+        }
+
+        function hideResult() {
+            document.getElementById('result').style.display = 'none';
+        }
+
+        function showMapContainer() {
+            document.getElementById('mapContainer').style.display = 'block';
+        }
+
+        function hideMapContainer() {
+            document.getElementById('mapContainer').style.display = 'none';
+        }
+
+        // Auto-detect development mode and show instructions
+        window.onload = function() {
+            const isDev = window.location.hostname === 'localhost' || 
+                         window.location.hostname === '127.0.0.1' ||
+                         window.location.port === '3000';
+            
+            if (isDev) {
+                showStatus('🔧 Development mode detected - LocationIQ + Leaflet.js ready!', 'success');
+            } else {
+                showStatus('🌐 Production mode - Enhanced location detection active', 'info');
+            }
+        };
+    </script>
+</body>
+</html>
             
             // Mobile-optimized settings
             const mobileOptions = {
