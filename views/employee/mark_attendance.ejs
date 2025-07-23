@@ -193,6 +193,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script defer src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+    <script src="/js/location-detector.js"></script>
     <script>
         const attendanceType = <%- JSON.stringify(attendanceType) %>;
         const companyLocation = <%- JSON.stringify(companyLocation) %>;
@@ -239,8 +240,141 @@
             return R * c; // Distance in meters
         }
 
-        // Get user location
+        // Initialize robust location detection
+        function initializeRobustLocation() {
+            console.log('🚀 Starting robust location detection...');
+            
+            if (!navigator.geolocation) {
+                console.log('❌ Geolocation not supported');
+                showLocationError("Geolocation is not supported by this browser", "Please use a modern browser that supports location services.");
+                return;
+            }
+
+            // Show loading state
+            updateLocationCard("Detecting your location...", "Using the most reliable method available. Please wait...", "loading");
+
+            // Check if LocationDetector is available
+            if (typeof LocationDetector === 'undefined') {
+                console.log('⚠️ LocationDetector not loaded, using fallback');
+                useSimpleLocationDetection();
+                return;
+            }
+
+            // Use robust location detector
+            const detector = new LocationDetector();
+            
+            detector.detectLocation(
+                // Success callback
+                (locationData) => {
+                    console.log('✅ Location detected successfully:', locationData);
+                    
+                    // Simulate position object for existing code compatibility
+                    const position = {
+                        coords: {
+                            latitude: locationData.latitude,
+                            longitude: locationData.longitude,
+                            accuracy: locationData.accuracy || 100
+                        }
+                    };
+                    
+                    handleLocationSuccess(position);
+                    
+                    // Show detection method
+                    const methodElement = document.createElement('small');
+                    methodElement.className = 'text-success';
+                    methodElement.innerHTML = `<br><i class="fas fa-check-circle"></i> ${locationData.method}`;
+                    const coordDiv = document.getElementById('coordinates');
+                    if (coordDiv) {
+                        coordDiv.appendChild(methodElement);
+                    }
+                },
+                // Error callback
+                (error) => {
+                    console.log('❌ All location detection methods failed:', error);
+                    showLocationError(
+                        "Unable to detect your location",
+                        "All automatic location methods failed. This might be due to browser permissions or network issues. Please try refreshing the page or check your location settings."
+                    );
+                }
+            );
+        }
+
+        // Fallback simple location detection
+        function useSimpleLocationDetection() {
+            console.log('🔄 Using simple location detection fallback...');
+            
+            const isDevelopment = window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1';
+            
+            if (isDevelopment) {
+                console.log('🔧 Development mode detected - using default location');
+                setTimeout(() => {
+                    const defaultPosition = {
+                        coords: {
+                            latitude: 16.4889184,
+                            longitude: 79.8856714,
+                            accuracy: 50
+                        }
+                    };
+                    handleLocationSuccess(defaultPosition);
+                    
+                    // Show development notice
+                    const devNotice = document.createElement('small');
+                    devNotice.className = 'text-warning';
+                    devNotice.innerHTML = '<br><i class="fas fa-code"></i> Development Mode - Using Default Location';
+                    const coordDiv = document.getElementById('coordinates');
+                    if (coordDiv) {
+                        coordDiv.appendChild(devNotice);
+                    }
+                }, 1000);
+                return;
+            }
+
+            // Production fallback - try basic GPS
+            const basicOptions = {
+                enableHighAccuracy: true,
+                timeout: 15000,
+                maximumAge: 300000 // 5 minutes
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    console.log('✅ Basic GPS successful');
+                    handleLocationSuccess(position);
+                },
+                (error) => {
+                    console.log('❌ Basic GPS failed, trying low accuracy');
+                    
+                    // Try with low accuracy
+                    const lowAccuracyOptions = {
+                        enableHighAccuracy: false,
+                        timeout: 30000,
+                        maximumAge: 600000 // 10 minutes
+                    };
+
+                    navigator.geolocation.getCurrentPosition(
+                        (position) => {
+                            console.log('✅ Low accuracy GPS successful');
+                            handleLocationSuccess(position);
+                        },
+                        (finalError) => {
+                            console.log('❌ All GPS methods failed');
+                            showLocationError(
+                                "GPS location failed",
+                                "Please ensure location services are enabled in your browser and device settings."
+                            );
+                        },
+                        lowAccuracyOptions
+                    );
+                },
+                basicOptions
+            );
+        }
+
+        // Get user location (keeping for compatibility)
         function getUserLocation() {
+            console.log('⚠️ getUserLocation called - redirecting to robust detection');
+            initializeRobustLocation();
+        }
             console.log('Starting getUserLocation...');
             
             if (!navigator.geolocation) {
@@ -1005,13 +1139,13 @@
         setInterval(updateTime, 1000);
         
         // Debug location API
-        console.log('Initializing location detection...');
+        console.log('Initializing robust location detection...');
         console.log('Navigator geolocation available:', !!navigator.geolocation);
         console.log('HTTPS protocol:', location.protocol === 'https:');
         console.log('User agent:', navigator.userAgent);
         
-        // Start location detection
-        getUserLocation();
+        // Start robust location detection
+        initializeRobustLocation();
     </script>
 </body>
 </html>
