@@ -524,24 +524,19 @@
 
         // Check if IP address suggests office network
         function checkIfOfficeIP(ipData) {
-            // Office network configuration - UPDATE THESE WITH YOUR ACTUAL OFFICE DETAILS
+            // Office network configuration - UPDATED WITH ACTUAL OFFICE DETAILS
             const officeLocationCriteria = {
                 // Your office city names (case-insensitive)
-                cities: ['bangalore', 'bengaluru', 'mumbai', 'delhi'], // Replace with your office cities
+                cities: ['Piduguralla'], // Manually put actual city
                 
                 // Your office IP ranges (if you know them)
-                ipRanges: [
-                    '192.168.', // Common local network
-                    '10.0.',    // Another common local range
-                    '172.16.',  // Private network range
-                    // Add your specific office IP ranges here
-                ],
+                ipRanges: ['192.168.', '10.0.', '172.16.'], // Your Wi-Fi LAN ranges
                 
                 // ISP names that your office might use
-                isps: ['airtel', 'jio', 'bsnl', 'idea', 'vodafone'], // Add your office ISP
+                isps: ['Reliance Jio Infocomm Limited'], // Your office ISP
                 
                 // Maximum distance from office coordinates (in meters)
-                maxDistanceFromOffice: 10000 // 10km radius
+                maxDistanceFromOffice: 10000 // 10 km
             };
             
             console.log('🔍 Checking IP data:', ipData);
