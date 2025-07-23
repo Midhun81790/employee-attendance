@@ -217,7 +217,11 @@
         document.addEventListener('DOMContentLoaded', function() {
             video = document.getElementById('video');
             setupAttendanceTypeButtons();
-            loadFaceAPIModels();
+            
+            // Wait a bit for face-api to load, then load models
+            setTimeout(() => {
+                loadFaceAPIModels();
+            }, 1000);
         });
 
         // Setup attendance type selection
@@ -246,13 +250,59 @@
         async function loadFaceAPIModels() {
             try {
                 console.log('Loading face-api models...');
-                await faceapi.nets.tinyFaceDetector.loadFromUri('/models');
-                await faceapi.nets.faceLandmark68Net.loadFromUri('/models');
-                await faceapi.nets.faceRecognitionNet.loadFromUri('/models');
+                
+                // Check if face-api is loaded
+                if (typeof faceapi === 'undefined') {
+                    throw new Error('face-api.js not loaded');
+                }
+                
+                // Load models with correct paths
+                const modelPath = '/models';
+                await faceapi.nets.tinyFaceDetector.loadFromUri(modelPath);
+                await faceapi.nets.faceLandmark68Net.loadFromUri(modelPath);
+                await faceapi.nets.faceRecognitionNet.loadFromUri(modelPath);
+                
                 console.log('✅ Face-api models loaded successfully');
+                showResult('Face recognition models loaded successfully', 'success');
+                
             } catch (error) {
                 console.error('❌ Error loading face-api models:', error);
-                showResult('Error loading face recognition models', 'error');
+                showResult(`Error loading face recognition models: ${error.message}`, 'error');
+                
+                // Try alternative model loading
+                setTimeout(() => {
+                    loadAlternativeModels();
+                }, 2000);
+            }
+        }
+        
+        // Alternative model loading with different paths
+        async function loadAlternativeModels() {
+            try {
+                console.log('Trying alternative model paths...');
+                
+                // Try loading from different paths
+                const paths = ['/models/', './models/', '/public/models/'];
+                
+                for (const path of paths) {
+                    try {
+                        await faceapi.nets.tinyFaceDetector.loadFromUri(path);
+                        await faceapi.nets.faceLandmark68Net.loadFromUri(path);
+                        await faceapi.nets.faceRecognitionNet.loadFromUri(path);
+                        
+                        console.log(`✅ Models loaded from: ${path}`);
+                        showResult('Face recognition models loaded successfully', 'success');
+                        return;
+                    } catch (e) {
+                        console.log(`Failed to load from ${path}`);
+                    }
+                }
+                
+                throw new Error('All model paths failed');
+                
+            } catch (error) {
+                console.error('❌ Alternative model loading failed:', error);
+                showResult('Unable to load face recognition models. Please check model files.', 'error');
             }
         }
 

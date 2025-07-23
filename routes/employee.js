@@ -211,35 +211,54 @@ router.post("/mark-attendance", async (req, res) => {
       COMPANY_LOCATION.longitude
     );
 
-    // Smart location validation with multiple radius levels
+    // Detect mobile devices for enhanced location validation
+    const userAgent = req.headers['user-agent'] || '';
+    const isMobileDevice = /Mobile|Android|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(userAgent);
+
+    // Smart location validation with mobile-optimized settings
     const userAccuracy = parseFloat(accuracy) || 1000;
     const primaryRadius = COMPANY_LOCATION.radius || 1000;
     const backupRadius = COMPANY_LOCATION.backupRadius || 2000;
     const allowLowAccuracy = COMPANY_LOCATION.allowLowAccuracy !== false;
 
+    // Mobile-specific adjustments
+    let mobileRadiusBonus = 0;
+    let mobileAccuracyThreshold = 500;
+    
+    if (isMobileDevice) {
+      mobileRadiusBonus = 500; // Extra radius for mobile devices
+      mobileAccuracyThreshold = 2000; // More lenient accuracy threshold for mobile
+    }
+
     // Determine if within geofence using smart logic
     let isWithinGeofence = false;
     let validationReason = "";
 
-    if (distance <= primaryRadius) {
+    if (distance <= primaryRadius + mobileRadiusBonus) {
       isWithinGeofence = true;
-      validationReason = `Within primary radius (${primaryRadius}m)`;
-    } else if (distance <= backupRadius && allowLowAccuracy && userAccuracy > 500) {
+      validationReason = `Within primary radius${isMobileDevice ? ' (mobile bonus)' : ''} (${primaryRadius + mobileRadiusBonus}m)`;
+    } else if (distance <= backupRadius + mobileRadiusBonus && allowLowAccuracy && userAccuracy > mobileAccuracyThreshold) {
       isWithinGeofence = true;
-      validationReason = `Within backup radius due to low GPS accuracy (${backupRadius}m)`;
-    } else if (distance <= (primaryRadius + userAccuracy) && userAccuracy > 200) {
+      validationReason = `Within backup radius due to ${isMobileDevice ? 'mobile' : 'low'} GPS accuracy (${backupRadius + mobileRadiusBonus}m)`;
+    } else if (distance <= (primaryRadius + userAccuracy + mobileRadiusBonus) && userAccuracy > 200) {
       isWithinGeofence = true;
-      validationReason = `Within radius + GPS margin (${Math.round(primaryRadius + userAccuracy)}m)`;
+      validationReason = `Within radius + GPS margin${isMobileDevice ? ' + mobile bonus' : ''} (${Math.round(primaryRadius + userAccuracy + mobileRadiusBonus)}m)`;
+    } else if (isMobileDevice && distance <= (backupRadius + mobileRadiusBonus) && userAccuracy <= 5000) {
+      // Special mobile fallback for very poor GPS
+      isWithinGeofence = true;
+      validationReason = `Mobile device fallback due to poor GPS signal (${backupRadius + mobileRadiusBonus}m)`;
     }
 
-    console.log("📍 Enhanced Location validation:", {
+    console.log("📍 Enhanced Mobile Location validation:", {
       employeeName: employeeExists.name,
+      deviceType: isMobileDevice ? "📱 Mobile" : "💻 Desktop",
       userCoordinates: { lat: latitude, lng: longitude },
       shopCoordinates: { lat: COMPANY_LOCATION.latitude, lng: COMPANY_LOCATION.longitude },
       calculatedDistance: Math.round(distance) + " meters",
       userAccuracy: Math.round(userAccuracy) + " meters",
-      primaryRadius: primaryRadius + " meters",
-      backupRadius: backupRadius + " meters",
+      primaryRadius: (primaryRadius + mobileRadiusBonus) + " meters",
+      backupRadius: (backupRadius + mobileRadiusBonus) + " meters",
+      mobileBonus: isMobileDevice ? mobileRadiusBonus + "m" : "N/A",
       isWithinGeofence: isWithinGeofence,
       validationReason: validationReason,
       status: isWithinGeofence ? "✅ VALID LOCATION" : "❌ OUTSIDE GEOFENCE"

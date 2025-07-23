@@ -252,26 +252,37 @@
             // Show initial getting location message with immediate manual option
             updateLocationCard("Getting your location...", "Please allow location access when prompted. If stuck on this screen, make sure you're using HTTPS and location permissions are enabled.", "loading");
 
+            // Detect mobile device for optimized settings
+            function isMobileDevice() {
+                return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+            }
+
+            const mobile = isMobileDevice();
+            console.log('Device type:', mobile ? '📱 Mobile' : '💻 Desktop');
+
+            // Mobile-optimized GPS settings
             const options = {
-                enableHighAccuracy: true, // Changed back to true for better accuracy
-                timeout: 15000, // Increased timeout
-                maximumAge: 60000 // Allow cached location up to 1 minute old
+                enableHighAccuracy: true,
+                timeout: mobile ? 30000 : 15000, // Longer timeout for mobile
+                maximumAge: mobile ? 120000 : 60000 // Allow 2-minute cached location for mobile
             };
 
-            console.log('Calling navigator.geolocation.getCurrentPosition with options:', options);
+            console.log('Optimized GPS options for', mobile ? 'mobile' : 'desktop', ':', options);
             console.log('Current URL protocol:', window.location.protocol);
             console.log('Is HTTPS?', window.location.protocol === 'https:');
 
-            // Add immediate fallback for localhost/HTTP issues
+            // Add immediate fallback for localhost/HTTP issues (longer for mobile)
             const quickTimeout = setTimeout(() => {
                 console.log('Quick timeout reached - adding manual location option');
                 updateLocationCard(
                     "Location detection is taking longer than expected", 
-                    "This might be due to browser permissions or connection issues. You can still proceed with manual location entry below.",
+                    mobile ? 
+                        "📱 Mobile GPS can take longer. Try moving outside or near a window for better signal. You can still proceed with manual location entry below." :
+                        "This might be due to browser permissions or connection issues. You can still proceed with manual location entry below.",
                     "warning"
                 );
                 showManualLocationOption();
-            }, 8000); // 8 second timeout
+            }, mobile ? 15000 : 8000); // Longer timeout for mobile devices
 
             navigator.geolocation.getCurrentPosition(
                 (position) => {
@@ -385,27 +396,73 @@
             console.log('Error code:', error.code);
             console.log('Error message:', error.message);
             
+            const mobile = isMobileDevice();
             let message = "Unable to get your location";
             let suggestion = "";
             
             switch(error.code) {
                 case error.PERMISSION_DENIED:
                     message = "Location access was denied";
-                    suggestion = "Please click the location icon in your browser's address bar and allow location access, then try again.";
+                    suggestion = mobile ? 
+                        "📱 Mobile: Please enable location in your browser settings, then allow location access when prompted. Make sure location services are enabled in your device settings." :
+                        "Please click the location icon in your browser's address bar and allow location access, then try again.";
                     break;
                 case error.POSITION_UNAVAILABLE:
                     message = "Location information is unavailable";
-                    suggestion = "Please make sure your device's location services are enabled and you have a good GPS signal.";
+                    suggestion = mobile ?
+                        "📱 Mobile: GPS signal not available. Try moving outside or near a window. Make sure location services are enabled on your device." :
+                        "Please make sure your device's location services are enabled and you have a good GPS signal.";
                     break;
                 case error.TIMEOUT:
                     message = "Location request timed out";
-                    suggestion = "This might be due to poor GPS signal. Please try again or use manual entry.";
+                    suggestion = mobile ?
+                        "📱 Mobile: GPS is taking too long. This is common indoors. Try going outside and waiting 30 seconds, or use manual entry." :
+                        "This might be due to poor GPS signal. Please try again or use manual entry.";
                     break;
                 default:
-                    suggestion = "Please check your location settings and try again.";
+                    suggestion = mobile ?
+                        "📱 Mobile: Try refreshing the page, enabling high-accuracy GPS, or going outside for better signal." :
+                        "Please check your location settings and try again.";
+            }
+            
+            // For mobile, also try a fallback with lower accuracy
+            if (mobile && error.code === error.TIMEOUT) {
+                console.log('📱 Trying mobile fallback with lower accuracy...');
+                setTimeout(() => {
+                    tryMobileFallback();
+                }, 2000);
             }
             
             showLocationError(message, suggestion);
+        }
+
+        // Mobile fallback with relaxed settings
+        function tryMobileFallback() {
+            console.log('📱 Attempting mobile GPS fallback...');
+            
+            const fallbackOptions = {
+                enableHighAccuracy: false, // Use lower accuracy for speed
+                timeout: 45000, // Very long timeout
+                maximumAge: 300000 // Accept 5-minute old cached location
+            };
+
+            navigator.geolocation.getCurrentPosition(
+                (position) => {
+                    console.log('📱 Mobile fallback successful!');
+                    handleLocationSuccess(position);
+                },
+                (fallbackError) => {
+                    console.log('📱 Mobile fallback also failed:', fallbackError);
+                    // Show final manual option
+                    updateLocationCard(
+                        "GPS unavailable on mobile device", 
+                        "📱 Mobile GPS is not working. This is common indoors or in areas with poor signal. Please use manual location entry below.",
+                        "warning"
+                    );
+                    showManualLocationOption();
+                },
+                fallbackOptions
+            );
         }
 
         // Get address from coordinates (simple reverse geocoding)
