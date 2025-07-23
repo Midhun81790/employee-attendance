@@ -21,14 +21,37 @@
     <div id="error" style="display:none; color: red;"></div>
 
     <script>
+        // Detect if user is on mobile
+        function isMobile() {
+            return /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
+        }
+
         function getLocation() {
+            const mobile = isMobile();
+            document.getElementById("error").style.display = "none";
+            document.getElementById("result").style.display = "none";
+            
             if (navigator.geolocation) {
-                // Try high accuracy first
-                navigator.geolocation.getCurrentPosition(showPosition, tryLowAccuracy, {
+                // Mobile-optimized settings
+                const mobileOptions = {
+                    enableHighAccuracy: true,
+                    timeout: 30000, // Longer timeout for mobile
+                    maximumAge: 60000 // Allow 1-minute cached location
+                };
+                
+                // Desktop settings
+                const desktopOptions = {
                     enableHighAccuracy: true,
                     timeout: 15000,
                     maximumAge: 0
-                });
+                };
+                
+                const options = mobile ? mobileOptions : desktopOptions;
+                
+                console.log(`Using ${mobile ? 'mobile' : 'desktop'} location settings`);
+                
+                // Try high accuracy first
+                navigator.geolocation.getCurrentPosition(showPosition, tryLowAccuracy, options);
             } else {
                 document.getElementById("error").innerHTML = "Geolocation is not supported by this browser.";
                 document.getElementById("error").style.display = "block";
@@ -37,31 +60,68 @@
 
         function tryLowAccuracy(error) {
             console.log("High accuracy failed, trying low accuracy...");
-            navigator.geolocation.getCurrentPosition(showPosition, showError, {
+            const mobile = isMobile();
+            
+            // Even more lenient settings for mobile fallback
+            const fallbackOptions = mobile ? {
+                enableHighAccuracy: false,
+                timeout: 20000,
+                maximumAge: 300000 // 5 minutes for mobile
+            } : {
                 enableHighAccuracy: false,
                 timeout: 10000,
-                maximumAge: 300000 // 5 minutes
-            });
+                maximumAge: 300000
+            };
+            
+            navigator.geolocation.getCurrentPosition(showPosition, showError, fallbackOptions);
         }
 
         function showPosition(position) {
             const lat = position.coords.latitude;
             const lng = position.coords.longitude;
             const accuracy = position.coords.accuracy;
+            const mobile = isMobile();
             
-            // Assess accuracy quality
+            // Assess accuracy quality (more lenient for mobile)
             let accuracyStatus = "";
-            if (accuracy <= 50) {
-                accuracyStatus = "🟢 Excellent";
-            } else if (accuracy <= 200) {
-                accuracyStatus = "🟡 Good";
-            } else if (accuracy <= 1000) {
-                accuracyStatus = "🟠 Fair";
+            if (mobile) {
+                if (accuracy <= 100) {
+                    accuracyStatus = "🟢 Excellent (Mobile)";
+                } else if (accuracy <= 500) {
+                    accuracyStatus = "🟡 Good (Mobile)";
+                } else if (accuracy <= 2000) {
+                    accuracyStatus = "🟠 Fair (Mobile)";
+                } else {
+                    accuracyStatus = "🔴 Poor (Mobile)";
+                }
             } else {
-                accuracyStatus = "🔴 Poor";
+                if (accuracy <= 50) {
+                    accuracyStatus = "🟢 Excellent";
+                } else if (accuracy <= 200) {
+                    accuracyStatus = "🟡 Good";
+                } else if (accuracy <= 1000) {
+                    accuracyStatus = "🟠 Fair";
+                } else {
+                    accuracyStatus = "🔴 Poor";
+                }
+            }
+            
+            // Mobile-specific recommendations
+            let recommendation = "";
+            if (mobile) {
+                if (accuracy <= 500) {
+                    recommendation = "✅ Good accuracy for mobile attendance";
+                } else if (accuracy <= 2000) {
+                    recommendation = "⚠️ Try moving outside or near a window for better GPS signal";
+                } else {
+                    recommendation = "❌ Poor GPS signal. Go outside and wait 30 seconds, then try again";
+                }
+            } else {
+                recommendation = accuracy <= 200 ? "✅ Good accuracy for attendance" : "⚠️ Try refreshing for better location";
             }
             
             document.getElementById("coordinates").innerHTML = `
+                <p><strong>Device:</strong> ${mobile ? "📱 Mobile" : "💻 Desktop"}</p>
                 <p><strong>Latitude:</strong> ${lat}</p>
                 <p><strong>Longitude:</strong> ${lng}</p>
                 <p><strong>Accuracy:</strong> ${accuracy} meters ${accuracyStatus}</p>
@@ -70,27 +130,60 @@
                 <code>"latitude": ${lat},<br>"longitude": ${lng}</code>
                 <hr>
                 <p><strong>Recommendation:</strong></p>
-                <small>${accuracy <= 200 ? "✅ Good accuracy for attendance" : "⚠️ Try moving outside for better GPS signal"}</small>
+                <small>${recommendation}</small>
+                ${mobile && accuracy > 1000 ? '<br><small><strong>📱 Mobile Tips:</strong> Enable high accuracy GPS, go outside, wait for better signal</small>' : ''}
             `;
             document.getElementById("result").style.display = "block";
         }
 
         function showError(error) {
             let errorText = "";
+            const mobile = isMobile();
+            
             switch(error.code) {
                 case error.PERMISSION_DENIED:
-                    errorText = "User denied the request for Geolocation. Please allow location access.";
+                    errorText = "❌ User denied the request for Geolocation. Please allow location access.";
+                    if (mobile) {
+                        errorText += "<br><small>📱 Mobile: Check browser location permissions and device location settings</small>";
+                    }
                     break;
                 case error.POSITION_UNAVAILABLE:
-                    errorText = "Location information is unavailable.";
+                    errorText = "❌ Location information is unavailable.";
+                    if (mobile) {
+                        errorText += "<br><small>📱 Mobile: Move outside or near a window. Check if GPS is enabled.</small>";
+                    }
                     break;
                 case error.TIMEOUT:
-                    errorText = "The request to get user location timed out.";
+                    errorText = "❌ The request to get user location timed out.";
+                    if (mobile) {
+                        errorText += "<br><small>📱 Mobile: GPS signal is weak. Try going outside and waiting 30 seconds.</small>";
+                    }
                     break;
                 default:
-                    errorText = "An unknown error occurred.";
+                    errorText = "❌ An unknown error occurred.";
                     break;
             }
+            
+            // Add troubleshooting tips
+            errorText += `
+                <hr>
+                <p><strong>Troubleshooting for ${mobile ? "📱 Mobile Devices" : "💻 Desktop"}:</strong></p>
+                <ul style="text-align: left; font-size: 12px;">
+                    ${mobile ? `
+                        <li>Enable high accuracy GPS in device settings</li>
+                        <li>Allow location access in browser settings</li>
+                        <li>Move outside or near a window</li>
+                        <li>Wait 30+ seconds for GPS signal</li>
+                        <li>Check if location services are enabled for browser</li>
+                    ` : `
+                        <li>Allow location access in browser</li>
+                        <li>Check browser location permissions</li>
+                        <li>Try refreshing the page</li>
+                        <li>Ensure WiFi location services are enabled</li>
+                    `}
+                </ul>
+            `;
+            
             document.getElementById("error").innerHTML = errorText;
             document.getElementById("error").style.display = "block";
         }

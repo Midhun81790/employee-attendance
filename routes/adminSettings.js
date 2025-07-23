@@ -101,7 +101,14 @@ router.post("/update-location", async (req, res) => {
     
     // Save to config file
     const configPath = path.join(__dirname, '..', 'config', 'location.json');
-    await fs.writeFile(configPath, JSON.stringify(newConfig, null, 2), 'utf8');
+    
+    // Create config directory if it doesn't exist
+    const configDir = path.dirname(configPath);
+    if (!fs.existsSync(configDir)) {
+      fs.mkdirSync(configDir, { recursive: true });
+    }
+    
+    fs.writeFileSync(configPath, JSON.stringify(newConfig, null, 2), 'utf8');
     
     console.log(`📍 Admin updated company location: ${lat}, ${lng} (${rad}m radius)`);
     

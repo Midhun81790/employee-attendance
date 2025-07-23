@@ -16,19 +16,40 @@ const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
 function getCompanyLocation() {
   try {
     const configPath = path.join(__dirname, '..', 'config', 'location.json');
+    
+    // Check if config file exists
+    if (!fs.existsSync(configPath)) {
+      console.log("Location config file not found, using default location");
+      return getDefaultLocation();
+    }
+    
     const configData = fs.readFileSync(configPath, 'utf8');
     const config = JSON.parse(configData);
+    
+    // Validate config structure
+    if (!config.shopLocation || typeof config.shopLocation !== 'object') {
+      console.log("Invalid location config structure, using default");
+      return getDefaultLocation();
+    }
+    
     return config.shopLocation;
+    
   } catch (error) {
     console.error("Error loading location config:", error);
-    // Fallback to default location
-    return {
-      latitude: 15.227778,
-      longitude: 79.885556,
-      address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
-      radius: 200
-    };
+    return getDefaultLocation();
   }
+}
+
+// Default location fallback
+function getDefaultLocation() {
+  return {
+    latitude: 16.4889184,
+    longitude: 79.8856714,
+    address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
+    radius: 1000,
+    backupRadius: 2000,
+    allowLowAccuracy: true
+  };
 }
 
 // Login Page
@@ -53,7 +74,15 @@ router.post("/login", (req, res) => {
 // Dashboard (protected)
 router.get("/dashboard", (req, res) => {
   if (!req.session.isLoggedIn) return res.redirect("/");
-  res.render("dashboard");
+  
+  // Get current location for dashboard
+  const currentLocation = getCompanyLocation();
+  
+  res.render("dashboard", { 
+    currentLocation,
+    success: req.query.success,
+    error: req.query.error 
+  });
 });
 
 // Logout
