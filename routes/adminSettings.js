@@ -85,13 +85,15 @@ router.post("/update-location", async (req, res) => {
       return res.redirect("/admin/settings?error=" + encodeURIComponent("Radius must be between 10 and 1000 meters"));
     }
     
-    // Create updated configuration
+    // Create updated configuration with enhanced features
     const newConfig = {
       shopLocation: {
         latitude: lat,
         longitude: lng,
         address: address.trim(),
-        radius: rad
+        radius: rad,
+        backupRadius: Math.max(rad * 2, 2000), // Automatic backup radius
+        allowLowAccuracy: true // Enable smart location validation
       },
       lastUpdated: new Date().toISOString(),
       updatedBy: "admin"

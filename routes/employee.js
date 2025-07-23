@@ -211,29 +211,63 @@ router.post("/mark-attendance", async (req, res) => {
       COMPANY_LOCATION.longitude
     );
 
-    const isWithinGeofence = distance <= COMPANY_LOCATION.radius;
-    console.log("📍 Location validation:", {
+    // Smart location validation with multiple radius levels
+    const userAccuracy = parseFloat(accuracy) || 1000;
+    const primaryRadius = COMPANY_LOCATION.radius || 1000;
+    const backupRadius = COMPANY_LOCATION.backupRadius || 2000;
+    const allowLowAccuracy = COMPANY_LOCATION.allowLowAccuracy !== false;
+
+    // Determine if within geofence using smart logic
+    let isWithinGeofence = false;
+    let validationReason = "";
+
+    if (distance <= primaryRadius) {
+      isWithinGeofence = true;
+      validationReason = `Within primary radius (${primaryRadius}m)`;
+    } else if (distance <= backupRadius && allowLowAccuracy && userAccuracy > 500) {
+      isWithinGeofence = true;
+      validationReason = `Within backup radius due to low GPS accuracy (${backupRadius}m)`;
+    } else if (distance <= (primaryRadius + userAccuracy) && userAccuracy > 200) {
+      isWithinGeofence = true;
+      validationReason = `Within radius + GPS margin (${Math.round(primaryRadius + userAccuracy)}m)`;
+    }
+
+    console.log("📍 Enhanced Location validation:", {
       employeeName: employeeExists.name,
       userCoordinates: { lat: latitude, lng: longitude },
       shopCoordinates: { lat: COMPANY_LOCATION.latitude, lng: COMPANY_LOCATION.longitude },
       calculatedDistance: Math.round(distance) + " meters",
-      allowedRadius: COMPANY_LOCATION.radius + " meters",
+      userAccuracy: Math.round(userAccuracy) + " meters",
+      primaryRadius: primaryRadius + " meters",
+      backupRadius: backupRadius + " meters",
       isWithinGeofence: isWithinGeofence,
+      validationReason: validationReason,
       status: isWithinGeofence ? "✅ VALID LOCATION" : "❌ OUTSIDE GEOFENCE"
     });
 
-    // STRICT ENFORCEMENT: Block attendance if not within geofence
+    // More lenient enforcement with detailed feedback
     if (!isWithinGeofence) {
-      console.log("ATTENDANCE BLOCKED: Employee outside geofence");
+      console.log("ATTENDANCE BLOCKED: Employee outside all geofence zones");
+      
+      let helpMessage = "";
+      if (userAccuracy > 1000) {
+        helpMessage = " Try moving to an area with better GPS signal and wait for more accurate location.";
+      } else if (distance <= backupRadius) {
+        helpMessage = " You're close but outside the primary zone. Contact admin if you're at the office.";
+      }
+      
       return res.status(403).json({ 
-        message: `Attendance denied: You are ${Math.round(distance)}m away from the office. You must be within ${COMPANY_LOCATION.radius}m to mark attendance.`,
+        message: `Location verification failed: You are ${Math.round(distance)}m from office. Maximum allowed: ${primaryRadius}m.${helpMessage}`,
         distance: Math.round(distance),
-        requiredRadius: COMPANY_LOCATION.radius,
-        isWithinGeofence: false
+        accuracy: Math.round(userAccuracy),
+        requiredRadius: primaryRadius,
+        backupRadius: backupRadius,
+        isWithinGeofence: false,
+        helpMessage: helpMessage
       });
     }
 
-    console.log("✅ Location verified - Employee is within geofence");
+    console.log("✅ Location verified:", validationReason);
 
     // Get device info
     const deviceInfo = {
