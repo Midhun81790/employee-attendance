@@ -75,6 +75,19 @@ const employeeRoutes = require("./routes/employee");
 const attendanceAPIRoutes = require("./routes/attendanceAPI");
 const adminSettingsRoutes = require("./routes/adminSettings");
 
+// WiFi detection endpoint
+app.head('/ping', (req, res) => {
+  res.status(200).end();
+});
+
+app.get('/ping', (req, res) => {
+  res.json({ 
+    status: 'ok', 
+    timestamp: new Date().toISOString(),
+    server: 'office'
+  });
+});
+
 // The more specific employee routes must be registered before the general routes
 // to avoid being caught by the main router's wildcard handlers.
 app.use("/employee", employeeRoutes);

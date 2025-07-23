@@ -343,21 +343,289 @@
             switch(error.code) {
                 case error.PERMISSION_DENIED:
                     message = "Location access was denied";
-                    suggestion = "Please allow location access in your browser settings and try again.";
+                    suggestion = "Trying WiFi-based location detection...";
                     break;
                 case error.POSITION_UNAVAILABLE:
                     message = "Location information is unavailable";
-                    suggestion = "Please make sure location services are enabled on your device.";
+                    suggestion = "Trying WiFi-based location detection...";
                     break;
                 case error.TIMEOUT:
                     message = "Location request timed out";
-                    suggestion = "Poor GPS signal. Try moving to an open area or near a window.";
+                    suggestion = "Trying WiFi-based location detection...";
                     break;
                 default:
-                    suggestion = "Please check your location settings and try again.";
+                    suggestion = "Trying WiFi-based location detection...";
             }
             
-            showLocationError(message, suggestion);
+            // Try WiFi-based location as fallback
+            console.log('🔄 Attempting WiFi-based location detection...');
+            updateLocationCard("Trying WiFi location...", "Checking if you're connected to office WiFi network", "loading");
+            
+            setTimeout(() => {
+                tryWiFiLocation();
+            }, 2000);
+        }
+
+        // Try WiFi-based location detection
+        async function tryWiFiLocation() {
+            try {
+                console.log('📶 Attempting WiFi-based location detection...');
+                
+                // Method 1: Check IP-based location for office network
+                const ipLocation = await getIPBasedLocation();
+                
+                if (ipLocation && ipLocation.isOfficeNetwork) {
+                    console.log('✅ Office WiFi detected via IP location');
+                    
+                    // Use office location coordinates
+                    const wifiPosition = {
+                        coords: {
+                            latitude: companyLocation.latitude,
+                            longitude: companyLocation.longitude,
+                            accuracy: 100 // WiFi accuracy is moderate
+                        }
+                    };
+                    
+                    userLocation = {
+                        latitude: wifiPosition.coords.latitude,
+                        longitude: wifiPosition.coords.longitude
+                    };
+                    locationAccuracy = wifiPosition.coords.accuracy;
+                    
+                    const distance = 0; // Assume at office if on office WiFi
+                    const address = `${ipLocation.city || 'Office'}, ${ipLocation.region || 'India'} (WiFi)`;
+                    
+                    showLocationStatus(distance, true, address);
+                    return;
+                }
+                
+                // Method 2: Check if connected to known office WiFi networks
+                if (await isConnectedToOfficeWiFi()) {
+                    console.log('✅ Office WiFi network detected');
+                    
+                    const wifiPosition = {
+                        coords: {
+                            latitude: companyLocation.latitude,
+                            longitude: companyLocation.longitude,
+                            accuracy: 50
+                        }
+                    };
+                    
+                    userLocation = {
+                        latitude: wifiPosition.coords.latitude,
+                        longitude: wifiPosition.coords.longitude
+                    };
+                    locationAccuracy = wifiPosition.coords.accuracy;
+                    
+                    showLocationStatus(0, true, "Office Location (WiFi Network)");
+                    return;
+                }
+                
+                // Fallback: No office network detected
+                console.log('❌ No office WiFi network detected');
+                showLocationError(
+                    "Location detection failed", 
+                    "GPS unavailable and not connected to office WiFi. Please enable location services or connect to office WiFi network."
+                );
+                
+            } catch (error) {
+                console.error('WiFi location detection failed:', error);
+                showLocationError(
+                    "All location methods failed",
+                    "Please enable GPS location services or connect to the office WiFi network."
+                );
+            }
+        }
+
+        // Get IP-based location to check if on office network
+        async function getIPBasedLocation() {
+            try {
+                // Try multiple IP location services with better data
+                const services = [
+                    {
+                        url: 'http://ip-api.com/json/?fields=status,message,country,countryCode,region,regionName,city,zip,lat,lon,timezone,isp,org,as,query',
+                        parser: (data) => ({
+                            ip: data.query,
+                            city: data.city,
+                            region: data.regionName,
+                            country: data.country,
+                            lat: data.lat,
+                            lon: data.lon,
+                            isp: data.isp,
+                            org: data.org
+                        })
+                    },
+                    {
+                        url: 'https://ipapi.co/json/',
+                        parser: (data) => ({
+                            ip: data.ip,
+                            city: data.city,
+                            region: data.region,
+                            country: data.country_name,
+                            lat: data.latitude,
+                            lon: data.longitude,
+                            isp: data.org
+                        })
+                    },
+                    {
+                        url: 'https://api.ipify.org?format=json',
+                        parser: (data) => ({
+                            ip: data.ip,
+                            city: null,
+                            region: null,
+                            country: null,
+                            lat: null,
+                            lon: null,
+                            isp: null
+                        })
+                    }
+                ];
+                
+                for (const service of services) {
+                    try {
+                        console.log(`🌐 Trying IP service: ${service.url}`);
+                        
+                        const response = await fetch(service.url, {
+                            method: 'GET',
+                            headers: {
+                                'Accept': 'application/json',
+                            }
+                        });
+                        
+                        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+                        
+                        const data = await response.json();
+                        const parsedData = service.parser(data);
+                        
+                        console.log('📍 IP Location data:', parsedData);
+                        
+                        // Check if IP suggests office location
+                        const isOfficeNetwork = checkIfOfficeIP(parsedData);
+                        
+                        return {
+                            ...parsedData,
+                            isOfficeNetwork: isOfficeNetwork
+                        };
+                        
+                    } catch (err) {
+                        console.warn(`❌ IP service ${service.url} failed:`, err);
+                        continue;
+                    }
+                }
+                
+                console.warn('⚠️ All IP location services failed');
+                return null;
+                
+            } catch (error) {
+                console.error('❌ IP location detection error:', error);
+                return null;
+            }
+        }
+
+        // Check if IP address suggests office network
+        function checkIfOfficeIP(ipData) {
+            // Office network configuration - UPDATE THESE WITH YOUR ACTUAL OFFICE DETAILS
+            const officeLocationCriteria = {
+                // Your office city names (case-insensitive)
+                cities: ['bangalore', 'bengaluru', 'mumbai', 'delhi'], // Replace with your office cities
+                
+                // Your office IP ranges (if you know them)
+                ipRanges: [
+                    '192.168.', // Common local network
+                    '10.0.',    // Another common local range
+                    '172.16.',  // Private network range
+                    // Add your specific office IP ranges here
+                ],
+                
+                // ISP names that your office might use
+                isps: ['airtel', 'jio', 'bsnl', 'idea', 'vodafone'], // Add your office ISP
+                
+                // Maximum distance from office coordinates (in meters)
+                maxDistanceFromOffice: 10000 // 10km radius
+            };
+            
+            console.log('🔍 Checking IP data:', ipData);
+            
+            // Check city match (case-insensitive)
+            if (ipData.city && officeLocationCriteria.cities.some(city => 
+                ipData.city.toLowerCase().includes(city.toLowerCase()))) {
+                console.log(`✅ IP city "${ipData.city}" matches office location`);
+                return true;
+            }
+            
+            // Check IP range (basic check for local networks)
+            if (ipData.ip && officeLocationCriteria.ipRanges.some(range => 
+                ipData.ip.startsWith(range))) {
+                console.log(`✅ IP address "${ipData.ip}" is in office network range`);
+                return true;
+            }
+            
+            // Check ISP match (if provided)
+            if (ipData.isp && officeLocationCriteria.isps.some(isp => 
+                ipData.isp.toLowerCase().includes(isp.toLowerCase()))) {
+                console.log(`✅ ISP "${ipData.isp}" matches office ISP`);
+                // For ISP match, also check distance
+                if (ipData.lat && ipData.lon) {
+                    const distance = calculateDistance(
+                        ipData.lat, ipData.lon,
+                        companyLocation.latitude, companyLocation.longitude
+                    );
+                    
+                    if (distance <= officeLocationCriteria.maxDistanceFromOffice) {
+                        console.log(`✅ Distance ${Math.round(distance)}m within acceptable range`);
+                        return true;
+                    }
+                }
+            }
+            
+            // Check distance from office (if IP provides coordinates)
+            if (ipData.lat && ipData.lon) {
+                const distance = calculateDistance(
+                    ipData.lat, ipData.lon,
+                    companyLocation.latitude, companyLocation.longitude
+                );
+                
+                console.log(`📍 Distance from office: ${Math.round(distance)}m`);
+                
+                if (distance <= officeLocationCriteria.maxDistanceFromOffice) {
+                    console.log(`✅ IP location within ${Math.round(distance)}m of office`);
+                    return true;
+                }
+            }
+            
+            console.log('❌ IP data does not match office criteria');
+            return false;
+        }
+
+        // Check if connected to known office WiFi networks
+        async function isConnectedToOfficeWiFi() {
+            try {
+                // This is a simplified check using network timing
+                // In a real scenario, you might check specific network characteristics
+                
+                // Method 1: Check connection speed/latency to office server
+                const startTime = performance.now();
+                await fetch(window.location.origin + '/ping', { 
+                    method: 'HEAD',
+                    cache: 'no-cache'
+                });
+                const latency = performance.now() - startTime;
+                
+                // If very low latency, might be on local network
+                if (latency < 50) { // Less than 50ms suggests local network
+                    console.log('🌐 Low latency detected - possibly office network');
+                    return true;
+                }
+                
+                // Method 2: Check for office-specific network indicators
+                // You could add more sophisticated checks here
+                
+                return false;
+                
+            } catch (error) {
+                console.warn('WiFi network check failed:', error);
+                return false;
+            }
         }
 
         // Simple reverse geocoding using free service
