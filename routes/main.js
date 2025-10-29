@@ -2,8 +2,6 @@
 const express = require("express");
 const router = express.Router();
 const multer = require("multer");
-const fs = require('fs');
-const path = require('path');
 const Employee = require("../models/Employee");
 const EmployeeCredential = require("../models/EmployeeCredential");
 const Attendance = require("../models/Attendance");
@@ -11,46 +9,6 @@ const Attendance = require("../models/Attendance");
 // Load environment variables
 const ADMIN_EMAIL = process.env.ADMIN_EMAIL;
 const ADMIN_PASSWORD = process.env.ADMIN_PASSWORD;
-
-// Load company location from config file
-function getCompanyLocation() {
-  try {
-    const configPath = path.join(__dirname, '..', 'config', 'location.json');
-    
-    // Check if config file exists
-    if (!fs.existsSync(configPath)) {
-      console.log("Location config file not found, using default location");
-      return getDefaultLocation();
-    }
-    
-    const configData = fs.readFileSync(configPath, 'utf8');
-    const config = JSON.parse(configData);
-    
-    // Validate config structure
-    if (!config.shopLocation || typeof config.shopLocation !== 'object') {
-      console.log("Invalid location config structure, using default");
-      return getDefaultLocation();
-    }
-    
-    return config.shopLocation;
-    
-  } catch (error) {
-    console.error("Error loading location config:", error);
-    return getDefaultLocation();
-  }
-}
-
-// Default location fallback
-function getDefaultLocation() {
-  return {
-    latitude: 16.4889184,
-    longitude: 79.8856714,
-    address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, SOUTH SIDE KPR COMPLEX, 521/2, Pillutla Rd, beside POLICE STATION, Piduguralla, Andhra Pradesh 522413",
-    radius: 1000,
-    backupRadius: 2000,
-    allowLowAccuracy: true
-  };
-}
 
 // Login Page
 router.get("/", (req, res) => {
@@ -74,15 +32,7 @@ router.post("/login", (req, res) => {
 // Dashboard (protected)
 router.get("/dashboard", (req, res) => {
   if (!req.session.isLoggedIn) return res.redirect("/");
-  
-  // Get current location for dashboard
-  const currentLocation = getCompanyLocation();
-  
-  res.render("dashboard", { 
-    currentLocation,
-    success: req.query.success,
-    error: req.query.error 
-  });
+  res.render("dashboard");
 });
 
 // Logout
@@ -176,17 +126,14 @@ router.post("/mark-attendance", async (req, res) => {
       return res.json({ message: `Morning attendance already marked today for ${employee.name}` });
     }
 
-    // Get current location from config file
-    const currentLocation = getCompanyLocation();
-
-    // Create attendance record with dynamic location
+    // Create attendance record with default location (office location)
     const attendance = new Attendance({ 
       employee: employee._id,
       attendanceType: "MORNING_ENTRY",
       location: {
-        latitude: currentLocation.latitude,
-        longitude: currentLocation.longitude,
-        address: `${currentLocation.address} (Face Recognition Entry)`,
+        latitude: 15.227778, // Default to office location
+        longitude: 79.885556,
+        address: "LG Best Shop-LAXMI MARUTHI ELECTRONICS, Piduguralla (Face Recognition Entry)",
         accuracy: 0
       },
       deviceInfo: {

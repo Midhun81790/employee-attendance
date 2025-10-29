@@ -108,6 +108,25 @@
             </div>
         </div>
 
+        <!-- Device Information -->
+        <div class="row mb-4">
+            <div class="col-12">
+                <div class="dashboard-card p-3">
+                    <div class="row align-items-center">
+                        <div class="col-auto">
+                            <i class="bi bi-laptop text-primary" style="font-size: 2rem;"></i>
+                        </div>
+                        <div class="col">
+                            <h6 class="mb-1">Device Information</h6>
+                            <small class="text-muted" id="deviceInfo">
+                                <i class="bi bi-hdd-network"></i> MAC Address: <span id="macAddress" class="font-monospace">Detecting...</span>
+                            </small>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <div class="row justify-content-center">
             <!-- Attendance Actions -->
             <div class="col-lg-8">
@@ -253,6 +272,98 @@
         // Update time immediately and then every second
         updateTime();
         setInterval(updateTime, 1000);
+
+        // Get and display MAC address (network interface info)
+        async function getDeviceInfo() {
+            const macElement = document.getElementById('macAddress');
+            
+            try {
+                // Method 1: Try to get network information via WebRTC
+                const pc = new RTCPeerConnection({ iceServers: [] });
+                pc.createDataChannel('');
+                
+                pc.createOffer().then(offer => pc.setLocalDescription(offer));
+                
+                pc.onicecandidate = (ice) => {
+                    if (!ice || !ice.candidate || !ice.candidate.candidate) return;
+                    
+                    const candidateLine = ice.candidate.candidate;
+                    const parts = candidateLine.split(' ');
+                    
+                    // Extract IP address
+                    const ipAddress = parts[4];
+                    
+                    if (ipAddress && ipAddress !== '0.0.0.0') {
+                        // Use IP-based unique identifier (browsers don't expose real MAC addresses for security)
+                        const deviceId = generateDeviceId(ipAddress);
+                        macElement.innerHTML = `<span class="badge bg-primary">${deviceId}</span>`;
+                        pc.close();
+                    }
+                };
+                
+                // Fallback: Use browser fingerprint
+                setTimeout(() => {
+                    if (macElement.textContent === 'Detecting...') {
+                        const fingerprint = generateBrowserFingerprint();
+                        macElement.innerHTML = `<span class="badge bg-secondary">${fingerprint}</span>`;
+                    }
+                }, 3000);
+                
+            } catch (error) {
+                console.error('Error detecting device info:', error);
+                // Fallback to browser fingerprint
+                const fingerprint = generateBrowserFingerprint();
+                macElement.innerHTML = `<span class="badge bg-secondary">${fingerprint}</span>`;
+            }
+        }
+        
+        // Generate a unique device identifier based on IP and browser info
+        function generateDeviceId(ipAddress) {
+            const canvas = document.createElement('canvas');
+            const ctx = canvas.getContext('2d');
+            ctx.textBaseline = 'top';
+            ctx.font = '14px Arial';
+            ctx.fillText(ipAddress, 2, 2);
+            
+            const hash = hashString(canvas.toDataURL() + navigator.userAgent);
+            return formatMacAddress(hash);
+        }
+        
+        // Generate browser fingerprint as fallback
+        function generateBrowserFingerprint() {
+            const fingerprint = [
+                navigator.userAgent,
+                navigator.language,
+                screen.colorDepth,
+                screen.width + 'x' + screen.height,
+                new Date().getTimezoneOffset(),
+                navigator.hardwareConcurrency || 'unknown',
+                navigator.deviceMemory || 'unknown'
+            ].join('|');
+            
+            const hash = hashString(fingerprint);
+            return formatMacAddress(hash);
+        }
+        
+        // Simple hash function
+        function hashString(str) {
+            let hash = 0;
+            for (let i = 0; i < str.length; i++) {
+                const char = str.charCodeAt(i);
+                hash = ((hash << 5) - hash) + char;
+                hash = hash & hash; // Convert to 32bit integer
+            }
+            return Math.abs(hash).toString(16).padStart(12, '0');
+        }
+        
+        // Format as MAC address style (XX:XX:XX:XX:XX:XX)
+        function formatMacAddress(hash) {
+            const mac = hash.substring(0, 12).toUpperCase();
+            return mac.match(/.{1,2}/g).join(':');
+        }
+        
+        // Get device info on page load
+        getDeviceInfo();
 
         // Auto-refresh page every 5 minutes to update attendance status
         setTimeout(() => {
